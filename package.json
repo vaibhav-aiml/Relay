@@ -1,0 +1,24 @@
+{
+  "name": "relay-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Relay — Autonomous Personal AI Agent",
+  "workspaces": [
+    "packages/*",
+    "services/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev --workspace=@relay/backend",
+    "dev:mobile": "npm run dev --workspace=@relay/mobile",
+    "build": "tsc -b",
+    "test": "npm run test --workspace=@relay/backend",
+    "test:unit": "npm run test:unit --workspace=@relay/backend",
+    "test:integration": "npm run test:integration --workspace=@relay/backend",
+    "test:e2e": "npm run test:e2e --workspace=@relay/backend",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
