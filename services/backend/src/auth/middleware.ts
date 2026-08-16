@@ -13,14 +13,14 @@ export async function authMiddleware(req: FastifyRequest, reply: FastifyReply) {
 
   // If running in development without Firebase keys or with local bearer token
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    // Default fallback user for development
-    let defaultUser = await db.getUser('default-user');
+    const requestedUserId = (req.headers['x-user-id'] as string) || 'user-chandra';
+    let defaultUser = await db.getUser(requestedUserId);
     if (!defaultUser) {
       defaultUser = {
-        id: 'default-user',
+        id: requestedUserId,
         profile: {
-          name: 'Pilot User',
-          email: 'user@example.com',
+          name: requestedUserId === 'user-chandra' ? 'Chandra Shekhar' : 'Pilot User',
+          email: requestedUserId === 'user-chandra' ? 'chandra@example.com' : 'user@example.com',
           createdAt: new Date().toISOString(),
         },
         settings: {

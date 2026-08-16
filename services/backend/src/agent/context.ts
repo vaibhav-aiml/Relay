@@ -41,6 +41,19 @@ When planning:
       { role: 'system', content: systemPrompt },
       { role: 'user', content: `Goal: ${this.task.goal}` },
     ];
+
+    // Replay completed plan steps when resuming from a pause or approval
+    if (this.task.plan && this.task.plan.length > 0) {
+      for (const step of this.task.plan) {
+        if (step.status === 'completed' && step.result && step.toolName) {
+          const stepToolId = `call_${step.id || step.stepNumber}`;
+          this.addAssistantToolCalls(step.description || '', [
+            { id: stepToolId, name: step.toolName, args: step.args || {} },
+          ]);
+          this.addToolResult(stepToolId, step.toolName, step.result);
+        }
+      }
+    }
   }
 
   public getMessages(): ChatMessage[] {

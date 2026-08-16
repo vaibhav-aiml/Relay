@@ -3,7 +3,9 @@
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -14,10 +16,18 @@
     "composite": true
   },
   "references": [
-    { "path": "packages/shared-types" },
-    { "path": "packages/config" },
-    { "path": "packages/tool-schemas" },
-    { "path": "services/backend" }
+    {
+      "path": "packages/shared-types"
+    },
+    {
+      "path": "packages/config"
+    },
+    {
+      "path": "packages/tool-schemas"
+    },
+    {
+      "path": "services/backend"
+    }
   ],
   "files": []
 }

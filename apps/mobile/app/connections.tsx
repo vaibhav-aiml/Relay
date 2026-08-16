@@ -197,6 +197,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 20,
   },
+  statusPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
   statusActive: {
     backgroundColor: 'rgba(16, 185, 129, 0.15)',
   },

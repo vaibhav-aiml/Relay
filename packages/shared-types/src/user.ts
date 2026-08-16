@@ -6,7 +6,7 @@ export interface UserProfile {
 
 export interface UserSettings {
   voiceEnabled: boolean;
-  defaultProvider: 'groq' | 'claude';
+  defaultProvider: 'groq' | 'gemini' | 'claude';
   autoApproveLowRisk: boolean;
 }
 

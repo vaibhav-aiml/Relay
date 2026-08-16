@@ -41,7 +41,9 @@ export const contactsSearchTool: ToolDefinition<ContactsSearchInput> = {
         };
       });
 
-      return { contacts };
+      if (contacts.length > 0) {
+        return { contacts };
+      }
     }
 
     const matches = mockContacts.filter(

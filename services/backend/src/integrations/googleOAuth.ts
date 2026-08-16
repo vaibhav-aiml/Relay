@@ -31,20 +31,32 @@ export class GoogleOAuthService {
    * Decrypts stored OAuth tokens.
    */
   public static decryptTokens<T = Record<string, unknown>>(encryptedData: string): T {
-    const key = this.getEncryptionKey();
-    const [ivHex, authTagHex, encryptedText] = encryptedData.split(':');
+    const keysToTry = [
+      this.getEncryptionKey(),
+      crypto.createHash('sha256').update('relay-local-secret-encryption-key-32').digest(),
+    ];
 
+    const [ivHex, authTagHex, encryptedText] = encryptedData.split(':');
     if (!ivHex || !authTagHex || !encryptedText) {
       throw new Error('Invalid encrypted token payload format');
     }
 
-    const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivHex, 'hex'));
-    decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+    let lastError: Error | null = null;
+    for (const key of keysToTry) {
+      try {
+        const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivHex, 'hex'));
+        decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
 
-    let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
+        let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+        decrypted += decipher.final('utf8');
 
-    return JSON.parse(decrypted);
+        return JSON.parse(decrypted);
+      } catch (err: any) {
+        lastError = err;
+      }
+    }
+
+    throw new Error(`Token decryption failed: ${lastError?.message || 'Invalid key'}`);
   }
 
   /**

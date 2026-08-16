@@ -10,7 +10,8 @@
   ],
   "scripts": {
     "dev:backend": "npm run dev --workspace=@relay/backend",
-    "dev:mobile": "npm run dev --workspace=@relay/mobile",
+    "dev:mobile": "cd apps/mobile && npx expo start -c",
+    "mobile": "cd apps/mobile && npx expo start -c",
     "build": "tsc -b",
     "test": "npm run test --workspace=@relay/backend",
     "test:unit": "npm run test:unit --workspace=@relay/backend",

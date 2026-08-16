@@ -25,6 +25,7 @@ export class FirestoreRepository implements IDatabaseRepository {
       }
     }
     this.db = admin.firestore();
+    this.db.settings({ ignoreUndefinedProperties: true });
   }
 
   // Users
@@ -81,8 +82,9 @@ export class FirestoreRepository implements IDatabaseRepository {
   }
 
   async getTaskEvents(taskId: string): Promise<TaskEvent[]> {
-    const snap = await this.db.collection('events').where('taskId', '==', taskId).orderBy('timestamp', 'asc').get();
-    return snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<TaskEvent, 'id'>) }));
+    const snap = await this.db.collection('events').where('taskId', '==', taskId).get();
+    const events = snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<TaskEvent, 'id'>) }));
+    return events.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
   }
 
   // Approvals
