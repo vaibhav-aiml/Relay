@@ -1,7 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Linking } from 'react-native';
 import { TaskEvent, PlanStep } from '@relay/shared-types';
-import { Check, ShieldCheck, AlertTriangle, ArrowRight, CornerDownRight } from 'lucide-react-native';
+import { Check, ShieldCheck, AlertTriangle, ArrowRight, CornerDownRight, Phone } from 'lucide-react-native';
 
 interface StepTraceProps {
   steps: PlanStep[];
@@ -26,6 +26,7 @@ export const StepTrace: React.FC<StepTraceProps> = ({ steps, events }) => {
         const isFailed = step.status === 'failed';
         const isApproval = step.status === 'needs_approval';
         const isInProgress = step.status === 'in_progress';
+        const dialerUrl = (step.result as Record<string, any> | undefined)?.dialerUrl as string | undefined;
 
         return (
           <View key={step.id || index} style={styles.stepItem}>
@@ -76,6 +77,16 @@ export const StepTrace: React.FC<StepTraceProps> = ({ steps, events }) => {
                     </Text>
                   ))}
                 </View>
+              )}
+
+              {dialerUrl && (
+                <TouchableOpacity
+                  style={styles.dialerButton}
+                  onPress={() => Linking.openURL(dialerUrl)}
+                >
+                  <Phone size={14} color="#10b981" />
+                  <Text style={styles.dialerButtonText}>Open Native Phone Dialer ({dialerUrl})</Text>
+                </TouchableOpacity>
               )}
 
               {step.result ? (
@@ -239,5 +250,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#64748b',
     fontStyle: 'italic',
+  },
+  dialerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginVertical: 4,
+  },
+  dialerButtonText: {
+    color: '#10b981',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });

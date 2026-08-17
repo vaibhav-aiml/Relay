@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   SafeAreaView,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowUpRight, Sparkles, Send } from 'lucide-react-native';
@@ -19,10 +20,11 @@ import { TaskCard } from '../components/TaskCard';
 import { useAppStore } from '../store/useAppStore';
 
 const QUICK_PROMPTS = [
+  'Call Rahul',
+  'Call Mom to say I will be late for dinner',
   'Find 30m with Rahul on Tuesday afternoon and send an invite',
   'Check my unread emails from the team and summarize them',
   'Search the web for the latest updates on autonomous AI agents',
-  'Check my calendar schedule for tomorrow morning',
 ];
 
 export default function HomeScreen() {
@@ -38,11 +40,15 @@ export default function HomeScreen() {
     pollTaskUntilDone,
     cancelCurrentTask,
     fetchTasks,
+    syncDeviceContacts,
   } = useAppStore();
 
   useEffect(() => {
     fetchTasks();
+    // Sync device contacts only once on initial launch (guarded by AsyncStorage flag inside)
+    syncDeviceContacts(false);
   }, []);
+
 
   const handleLaunchTask = async (goalToRun?: string) => {
     const text = goalToRun || goalInput;
@@ -53,8 +59,16 @@ export default function HomeScreen() {
       setGoalInput('');
       pollTaskUntilDone(task.id);
       router.push(`/task/${task.id}`);
-    } catch (err) {
-      console.warn('Failed to launch task:', err);
+    } catch (err: any) {
+      const message = err?.message || 'Unknown error';
+      if (message.includes('Network') || message.includes('fetch') || message.includes('Failed to connect')) {
+        Alert.alert(
+          'Backend Not Reachable',
+          'Could not connect to the Relay backend server. Please make sure the backend is running with:\n\nnpm run dev:backend',
+        );
+      } else {
+        Alert.alert('Task Failed', message);
+      }
     }
   };
 

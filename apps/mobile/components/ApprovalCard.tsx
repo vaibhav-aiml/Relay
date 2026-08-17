@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { AlertTriangle, CheckCircle, XCircle, ShieldAlert } from 'lucide-react-native';
+import { AlertTriangle, CheckCircle, XCircle, ShieldAlert, PhoneCall, Phone } from 'lucide-react-native';
 import { Approval } from '@relay/shared-types';
 
 interface ApprovalCardProps {
@@ -17,15 +17,22 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = ({
   isLoading = false,
 }) => {
   const isCritical = approval.riskLevel === 'CRITICAL';
+  const isPhoneCall = approval.toolName === 'telephony.makeCall';
+  const recipientName = String(approval.args?.recipientName || 'Contact');
+  const phoneNumber = String(approval.args?.phoneNumber || '');
 
   return (
     <View style={[styles.card, isCritical ? styles.criticalBorder : styles.highRiskBorder]}>
       {/* Header */}
       <View style={styles.headerRow}>
         <View style={styles.badgeRow}>
-          <ShieldAlert size={18} color={isCritical ? '#ef4444' : '#f59e0b'} />
+          {isPhoneCall ? (
+            <PhoneCall size={18} color="#f59e0b" />
+          ) : (
+            <ShieldAlert size={18} color={isCritical ? '#ef4444' : '#f59e0b'} />
+          )}
           <Text style={[styles.badgeText, { color: isCritical ? '#ef4444' : '#f59e0b' }]}>
-            {approval.riskLevel} RISK CONFIRMATION REQUIRED
+            {isPhoneCall ? 'OUTBOUND CALL CONFIRMATION' : `${approval.riskLevel} RISK CONFIRMATION REQUIRED`}
           </Text>
         </View>
       </View>
@@ -34,18 +41,34 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = ({
       <Text style={styles.title}>{approval.description}</Text>
       <Text style={styles.toolName}>Action: {approval.toolName}</Text>
 
-      {/* Parameter Details */}
-      <View style={styles.paramsBox}>
-        <Text style={styles.paramsLabel}>Proposed Action Parameters:</Text>
-        {Object.entries(approval.args || {}).map(([k, v]) => (
-          <View key={k} style={styles.paramRow}>
-            <Text style={styles.paramKey}>{k}:</Text>
-            <Text style={styles.paramValue} numberOfLines={2}>
-              {typeof v === 'object' ? JSON.stringify(v) : String(v)}
-            </Text>
+      {/* Phone Call Callout */}
+      {isPhoneCall && (
+        <View style={styles.phoneCallout}>
+          <View style={styles.phoneIconBox}>
+            <Phone size={22} color="#10b981" />
           </View>
-        ))}
-      </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.phoneRecipient}>{recipientName}</Text>
+            <Text style={styles.phoneNumberText}>{phoneNumber}</Text>
+            <Text style={styles.phoneHint}>Approving will open your device's native phone dialer pre-filled.</Text>
+          </View>
+        </View>
+      )}
+
+      {/* Parameter Details */}
+      {!isPhoneCall && (
+        <View style={styles.paramsBox}>
+          <Text style={styles.paramsLabel}>Proposed Action Parameters:</Text>
+          {Object.entries(approval.args || {}).map(([k, v]) => (
+            <View key={k} style={styles.paramRow}>
+              <Text style={styles.paramKey}>{k}:</Text>
+              <Text style={styles.paramValue} numberOfLines={2}>
+                {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       {/* Action Buttons */}
       <View style={styles.buttonRow}>
@@ -55,7 +78,7 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = ({
           disabled={isLoading}
         >
           <XCircle size={18} color="#ef4444" />
-          <Text style={styles.denyText}>Deny Action</Text>
+          <Text style={styles.denyText}>Deny</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -67,8 +90,8 @@ export const ApprovalCard: React.FC<ApprovalCardProps> = ({
             <ActivityIndicator size="small" color="#ffffff" />
           ) : (
             <>
-              <CheckCircle size={18} color="#ffffff" />
-              <Text style={styles.approveText}>Approve & Run</Text>
+              {isPhoneCall ? <PhoneCall size={18} color="#ffffff" /> : <CheckCircle size={18} color="#ffffff" />}
+              <Text style={styles.approveText}>{isPhoneCall ? 'Approve & Open Dialer' : 'Approve & Run'}</Text>
             </>
           )}
         </TouchableOpacity>
@@ -197,5 +220,42 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  phoneCallout: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    marginBottom: 16,
+  },
+  phoneIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(16, 185, 129, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  phoneRecipient: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#ffffff',
+    marginBottom: 2,
+  },
+  phoneNumberText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#10b981',
+    fontFamily: 'monospace',
+    marginBottom: 4,
+  },
+  phoneHint: {
+    fontSize: 11,
+    color: '#94a3b8',
+    lineHeight: 15,
   },
 });

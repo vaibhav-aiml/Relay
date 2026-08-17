@@ -11,12 +11,22 @@ import {
   Alert,
 } from 'react-native';
 import { Header } from '../components/Header';
-import { Brain, Cpu, Volume2, Plus, Trash2, ShieldAlert } from 'lucide-react-native';
+import { Brain, Cpu, Volume2, Plus, Trash2, ShieldAlert, Users, RefreshCw } from 'lucide-react-native';
 import { useAppStore } from '../store/useAppStore';
 import { ApiService } from '../services/api';
 
 export default function SettingsScreen() {
-  const { memories, fetchMemories, addMemory, deleteMemory } = useAppStore();
+  const {
+    memories,
+    fetchMemories,
+    addMemory,
+    deleteMemory,
+    syncedContacts,
+    fetchSyncedContacts,
+    syncDeviceContacts,
+    clearSyncedContacts,
+    isSyncingContacts,
+  } = useAppStore();
 
   const [newKey, setNewKey] = useState('');
   const [newValue, setNewValue] = useState('');
@@ -24,6 +34,7 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     fetchMemories();
+    fetchSyncedContacts();
   }, []);
 
   const handleAddPreference = async () => {
@@ -33,10 +44,52 @@ export default function SettingsScreen() {
     setNewValue('');
   };
 
-  const handlePurgeAll = async () => {
-    await ApiService.purgeAllMemories();
-    fetchMemories();
+  const handleManualSyncContacts = async () => {
+    const res = await syncDeviceContacts(true);
+    if (res.success) {
+      Alert.alert('Contacts Synced', `Successfully synced ${res.count} contacts from your device.`);
+    } else {
+      Alert.alert('Sync Failed', res.error || 'Could not access device contacts. Please ensure permissions are granted.');
+    }
   };
+
+  const handleClearContacts = () => {
+    Alert.alert(
+      'Clear Synced Contacts',
+      'Are you sure you want to remove all synced device contacts from Relay?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear Contacts',
+          style: 'destructive',
+          onPress: async () => {
+            await clearSyncedContacts();
+            Alert.alert('Cleared', 'Synced contacts have been removed.');
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePurgeAll = () => {
+    Alert.alert(
+      'Purge All Stored Data',
+      'This will delete all saved memories, preferences, and session data. Are you sure?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Purge All',
+          style: 'destructive',
+          onPress: async () => {
+            await ApiService.purgeAllMemories();
+            fetchMemories();
+            Alert.alert('Purged', 'All stored memories and preferences have been cleared.');
+          },
+        },
+      ]
+    );
+  };
+
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -137,6 +190,49 @@ export default function SettingsScreen() {
           </View>
         </View>
 
+        {/* Device Contacts & Phonebook */}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Users size={18} color="#38bdf8" />
+            <Text style={styles.sectionTitle}>Device Contacts</Text>
+          </View>
+          <Text style={styles.sectionDesc}>
+            Allow Relay to resolve contact names to phone numbers directly from your device address book.
+          </Text>
+
+          <View style={styles.settingRow}>
+            <View>
+              <Text style={styles.settingLabel}>Synced Contacts</Text>
+              <Text style={styles.settingSub}>
+                {syncedContacts.length > 0
+                  ? `${syncedContacts.length} contacts available for calling`
+                  : 'No contacts synced yet'}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.syncBtn, isSyncingContacts && styles.btnDisabled]}
+              onPress={handleManualSyncContacts}
+              disabled={isSyncingContacts}
+            >
+              <RefreshCw size={14} color="#ffffff" />
+              <Text style={styles.syncBtnText}>
+                {isSyncingContacts ? 'Syncing...' : 'Sync Contacts'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {syncedContacts.length > 0 && (
+            <TouchableOpacity
+              style={styles.clearContactsBtn}
+              onPress={handleClearContacts}
+              disabled={isSyncingContacts}
+            >
+              <Trash2 size={14} color="#f87171" />
+              <Text style={styles.clearContactsBtnText}>Clear Synced Contacts</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         {/* Privacy & Data Purge */}
         <View style={[styles.sectionCard, { borderColor: 'rgba(239, 68, 68, 0.25)' }]}>
           <View style={styles.sectionHeader}>
@@ -152,6 +248,7 @@ export default function SettingsScreen() {
             <Text style={styles.purgeBtnText}>Purge All Stored Data</Text>
           </TouchableOpacity>
         </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -294,4 +391,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  syncBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  syncBtnText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  clearContactsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+    paddingVertical: 8,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  clearContactsBtnText: {
+    color: '#f87171',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  btnDisabled: {
+    opacity: 0.5,
+  },
 });
+

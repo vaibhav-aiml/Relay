@@ -1,6 +1,8 @@
 import { create } from 'zustand';
-import { Task, TaskEvent, Connection, Memory } from '@relay/shared-types';
+import { Linking } from 'react-native';
+import { Task, TaskEvent, Connection, Memory, UserContact } from '@relay/shared-types';
 import { ApiService } from '../services/api';
+import { DeviceContactsService } from '../services/contacts';
 
 interface AppState {
   currentTask: Task | null;
@@ -8,8 +10,10 @@ interface AppState {
   tasks: Task[];
   connections: Connection[];
   memories: Memory[];
+  syncedContacts: UserContact[];
   isLoading: boolean;
   isPolling: boolean;
+  isSyncingContacts: boolean;
   error: string | null;
 
   // Actions
@@ -23,8 +27,12 @@ interface AppState {
   fetchMemories: () => Promise<void>;
   addMemory: (key: string, value: string, category?: string) => Promise<void>;
   deleteMemory: (id: string) => Promise<void>;
+  fetchSyncedContacts: () => Promise<void>;
+  syncDeviceContacts: (force?: boolean) => Promise<{ success: boolean; count: number; skipped?: boolean; error?: string }>;
+  clearSyncedContacts: () => Promise<void>;
   clearError: () => void;
 }
+
 
 export const useAppStore = create<AppState>((set, get) => ({
   currentTask: null,
@@ -32,8 +40,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   tasks: [],
   connections: [],
   memories: [],
+  syncedContacts: [],
   isLoading: false,
   isPolling: false,
+  isSyncingContacts: false,
   error: null,
 
   createTask: async (goal: string) => {
@@ -91,9 +101,22 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   submitApproval: async (approvalId: string, decision: 'approved' | 'denied', reason?: string) => {
     set({ isLoading: true, error: null });
+    const current = get().currentTask;
+    const pending = current?.pendingApproval;
+
     try {
+      // If user approved a phone call, launch native dialer
+      if (decision === 'approved' && pending?.toolName === 'telephony.makeCall') {
+        const rawPhone = String(pending.args?.phoneNumber || '');
+        if (rawPhone) {
+          const clean = rawPhone.replace(/[^\d+]/g, '');
+          Linking.openURL(`tel:${clean}`).catch((e) => {
+            console.warn('Could not open native phone dialer:', e);
+          });
+        }
+      }
+
       await ApiService.submitApprovalDecision(approvalId, decision, reason);
-      const current = get().currentTask;
       if (current) {
         get().pollTaskUntilDone(current.id);
       }
@@ -159,5 +182,40 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  fetchSyncedContacts: async () => {
+    try {
+      const { contacts } = await ApiService.getSyncedContacts();
+      set({ syncedContacts: contacts || [] });
+    } catch (err: any) {
+      console.warn('Failed to fetch synced contacts:', err);
+    }
+  },
+
+  syncDeviceContacts: async (force = false) => {
+    set({ isSyncingContacts: true });
+    try {
+      const res = await DeviceContactsService.syncContacts(force);
+      if (res.success && !res.skipped) {
+        await get().fetchSyncedContacts();
+      }
+      set({ isSyncingContacts: false });
+      return res;
+    } catch (err: any) {
+      set({ isSyncingContacts: false });
+      return { success: false, count: 0, error: err.message };
+    }
+  },
+
+  clearSyncedContacts: async () => {
+    set({ isSyncingContacts: true });
+    try {
+      await DeviceContactsService.clearSyncedContacts();
+      set({ syncedContacts: [], isSyncingContacts: false });
+    } catch (err: any) {
+      set({ isSyncingContacts: false, error: err.message });
+    }
+  },
+
   clearError: () => set({ error: null }),
 }));
+

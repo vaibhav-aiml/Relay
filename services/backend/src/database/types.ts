@@ -1,4 +1,4 @@
-import { User, Task, TaskEvent, Approval, Memory, Connection } from '@relay/shared-types';
+import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact } from '@relay/shared-types';
 
 export interface IDatabaseRepository {
   // Users
@@ -26,8 +26,14 @@ export interface IDatabaseRepository {
   deleteMemory(userId: string, memoryId: string): Promise<boolean>;
   clearAllMemories(userId: string): Promise<void>;
 
+  // User Device Contacts
+  saveUserContacts(userId: string, contacts: UserContact[]): Promise<void>;
+  getUserContacts(userId: string): Promise<UserContact[]>;
+  clearUserContacts(userId: string): Promise<void>;
+
   // Connections
   saveConnection(connection: Connection): Promise<Connection>;
   getConnection(userId: string, provider: 'google'): Promise<Connection | null>;
   deleteConnection(userId: string, connectionId: string): Promise<boolean>;
 }
+

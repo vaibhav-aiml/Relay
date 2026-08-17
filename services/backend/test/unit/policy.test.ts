@@ -28,7 +28,7 @@ describe('PolicyEngine Unit Tests', () => {
     expect(gmailResult.riskLevel).toBe('MEDIUM');
   });
 
-  test('requires confirmation for high-risk mutating tools', () => {
+  test('requires confirmation for high-risk mutating tools and phone calls', () => {
     const sendEmailResult = PolicyEngine.evaluate('gmail.sendMessage', mockUser);
     expect(sendEmailResult.decision).toBe('NEEDS_CONFIRMATION');
     expect(sendEmailResult.riskLevel).toBe('HIGH');
@@ -36,6 +36,19 @@ describe('PolicyEngine Unit Tests', () => {
     const createEventResult = PolicyEngine.evaluate('calendar.createEvent', mockUser);
     expect(createEventResult.decision).toBe('NEEDS_CONFIRMATION');
     expect(createEventResult.riskLevel).toBe('HIGH');
+
+    const makeCallResult = PolicyEngine.evaluate('telephony.makeCall', mockUser);
+    expect(makeCallResult.decision).toBe('NEEDS_CONFIRMATION');
+    expect(makeCallResult.riskLevel).toBe('HIGH');
+  });
+
+  test('formats phone call approval description correctly', () => {
+    const desc = PolicyEngine.formatApprovalDescription('telephony.makeCall', {
+      recipientName: 'Rahul',
+      phoneNumber: '+91 98765 43210',
+      reason: 'discuss project roadmap',
+    });
+    expect(desc).toBe('Call Rahul at +91 98765 43210 - discuss project roadmap');
   });
 
   test('requires confirmation for critical-risk deletion tools', () => {

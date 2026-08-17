@@ -1,6 +1,7 @@
-import { Task, TaskEvent, Approval, Connection, Memory, HealthResponse } from '@relay/shared-types';
+import { Task, TaskEvent, Approval, Connection, Memory, HealthResponse, UserContact } from '@relay/shared-types';
 
 const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_API_URL || 'http://localhost:4000';
+
 
 export class ApiService {
   private static authToken: string | null = null;
@@ -95,10 +96,29 @@ export class ApiService {
     });
   }
 
+  // Device Contacts
+  public static async syncContacts(contacts: UserContact[]): Promise<{ success: boolean; count: number; message: string }> {
+    return this.request<{ success: boolean; count: number; message: string }>('/api/contacts/sync', {
+      method: 'POST',
+      body: JSON.stringify({ contacts }),
+    });
+  }
+
+  public static async getSyncedContacts(): Promise<{ contacts: UserContact[] }> {
+    return this.request<{ contacts: UserContact[] }>('/api/contacts');
+  }
+
+  public static async clearSyncedContacts(): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>('/api/contacts', {
+      method: 'DELETE',
+    });
+  }
+
   // Memory
   public static async listMemories(): Promise<{ memories: Memory[] }> {
     return this.request<{ memories: Memory[] }>('/api/memory');
   }
+
 
   public static async saveMemory(key: string, value: string, category?: string): Promise<{ memory: Memory }> {
     return this.request<{ memory: Memory }>('/api/memory', {

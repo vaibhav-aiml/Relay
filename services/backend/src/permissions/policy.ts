@@ -84,6 +84,12 @@ export class PolicyEngine {
         const eventId = String(args.eventId || '');
         return `Delete calendar event ID ${eventId}`;
       }
+      case 'telephony.makeCall': {
+        const name = String(args.recipientName || 'contact');
+        const phone = String(args.phoneNumber || '');
+        const reason = args.reason ? ` - ${args.reason}` : '';
+        return `Call ${name} at ${phone}${reason}`;
+      }
       default:
         return `Execute action '${toolName}' with provided parameters`;
     }

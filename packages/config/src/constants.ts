@@ -15,8 +15,9 @@ export const CAPABILITY_RISK_MAP: Record<string, { riskLevel: RiskLevel; descrip
   'web.search': { riskLevel: 'LOW', description: 'Search the web for information', requiresConfirmation: false },
   'web.open': { riskLevel: 'LOW', description: 'Fetch and read a public webpage', requiresConfirmation: false },
 
-  // Contacts
+  // Contacts & Telephony
   'contacts.search': { riskLevel: 'LOW', description: 'Search Google Contacts', requiresConfirmation: false },
+  'telephony.makeCall': { riskLevel: 'HIGH', description: 'Initiate a phone call to a contact', requiresConfirmation: true },
 
   // Calendar capabilities
   'calendar.findAvailability': { riskLevel: 'MEDIUM', description: 'Inspect free/busy schedule slots', requiresConfirmation: false },

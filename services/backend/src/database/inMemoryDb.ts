@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { User, Task, TaskEvent, Approval, Memory, Connection } from '@relay/shared-types';
+import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact } from '@relay/shared-types';
 import { IDatabaseRepository } from './types.js';
 
 export class InMemoryRepository implements IDatabaseRepository {
@@ -8,6 +8,7 @@ export class InMemoryRepository implements IDatabaseRepository {
   private events: Map<string, TaskEvent[]> = new Map();
   private approvals: Map<string, Approval> = new Map();
   private memories: Map<string, Memory[]> = new Map();
+  private contacts: Map<string, UserContact[]> = new Map();
   private connections: Map<string, Connection[]> = new Map();
 
   constructor() {
@@ -163,6 +164,19 @@ export class InMemoryRepository implements IDatabaseRepository {
 
   async clearAllMemories(userId: string): Promise<void> {
     this.memories.set(userId, []);
+  }
+
+  // User Device Contacts
+  async saveUserContacts(userId: string, contacts: UserContact[]): Promise<void> {
+    this.contacts.set(userId, contacts);
+  }
+
+  async getUserContacts(userId: string): Promise<UserContact[]> {
+    return this.contacts.get(userId) || [];
+  }
+
+  async clearUserContacts(userId: string): Promise<void> {
+    this.contacts.set(userId, []);
   }
 
   // Connections

@@ -12,6 +12,7 @@ import {
   gmailSendMessageTool,
 } from './gmail/index.js';
 import { contactsSearchTool } from './contacts/index.js';
+import { telephonyMakeCallTool } from './telephony/index.js';
 import { webSearchTool, webOpenTool } from './web/index.js';
 import { tasksCreateTool, tasksGetStatusTool, tasksCancelTool } from './tasks/index.js';
 import { memorySaveTool, memoryGetTool } from './memory/index.js';
@@ -31,8 +32,9 @@ export function initializeTools(): ToolRegistry {
   registry.register(gmailDraftMessageTool);
   registry.register(gmailSendMessageTool);
 
-  // Contacts
+  // Contacts & Telephony
   registry.register(contactsSearchTool);
+  registry.register(telephonyMakeCallTool);
 
   // Web
   registry.register(webSearchTool);

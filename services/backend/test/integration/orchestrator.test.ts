@@ -121,4 +121,80 @@ describe('Agent Orchestrator Integration Tests', () => {
     expect(resumedTask.status).toBe('COMPLETED');
     expect(resumedTask.finalAnswer).toContain('Meeting with Rahul has been successfully scheduled');
   });
+
+  test('pauses at WAITING_APPROVAL on telephony.makeCall and prepares dialerUrl upon approval', async () => {
+    const mockProvider = new MockProvider([
+      {
+        type: 'tool_call',
+        toolCalls: [
+          {
+            id: 'call-contact-search-1',
+            name: 'contacts.search',
+            args: { query: 'Rahul', maxResults: 1 },
+          },
+        ],
+        text: 'Searching for Rahul in contacts.',
+      },
+      {
+        type: 'tool_call',
+        toolCalls: [
+          {
+            id: 'call-phone-1',
+            name: 'telephony.makeCall',
+            args: {
+              recipientName: 'Rahul',
+              phoneNumber: '+91 98765 43210',
+              reason: 'Discuss project roadmap',
+            },
+          },
+        ],
+        text: 'Found Rahul (+91 98765 43210). Requesting confirmation to place phone call.',
+      },
+      {
+        type: 'final_answer',
+        text: 'Phone dialer has been prepared with Rahul (+91 98765 43210).',
+      },
+    ]);
+
+    const customPlanner = new Planner(mockUser, mockProvider);
+
+    const task: Task = {
+      id: 'task-phone-call',
+      userId: mockUser.id,
+      goal: 'Call Rahul to discuss project roadmap',
+      status: 'CREATED',
+      plan: [],
+      currentStep: 0,
+      iterations: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    await db.saveTask(task);
+
+    // Initial run executes contacts.search (LOW risk) then pauses on telephony.makeCall (HIGH risk)
+    const pausedTask = await orchestrator.runTask(task, mockUser, customPlanner);
+
+    expect(pausedTask.status).toBe('WAITING_APPROVAL');
+    expect(pausedTask.pendingApproval).toBeDefined();
+    expect(pausedTask.pendingApproval?.toolName).toBe('telephony.makeCall');
+    expect(pausedTask.pendingApproval?.riskLevel).toBe('HIGH');
+    expect(pausedTask.pendingApproval?.description).toContain('Call Rahul at +91 98765 43210');
+
+    // Simulate user approving via UI
+    const resumedTask = await orchestrator.resumeWithApproval(
+      pausedTask.id,
+      pausedTask.pendingApproval!.id,
+      'approved',
+      mockUser,
+      customPlanner
+    );
+
+    expect(resumedTask.status).toBe('COMPLETED');
+    expect(resumedTask.finalAnswer).toContain('Phone dialer has been prepared with Rahul');
+    const callStep = resumedTask.plan.find((s) => s.toolName === 'telephony.makeCall');
+    expect(callStep).toBeDefined();
+    expect(callStep?.status).toBe('completed');
+    expect((callStep?.result as Record<string, any> | undefined)?.dialerUrl).toBe('tel:+919876543210');
+  });
 });

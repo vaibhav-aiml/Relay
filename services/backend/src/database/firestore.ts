@@ -1,6 +1,6 @@
 import admin from 'firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
-import { User, Task, TaskEvent, Approval, Memory, Connection } from '@relay/shared-types';
+import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact } from '@relay/shared-types';
 import { IDatabaseRepository } from './types.js';
 
 export class FirestoreRepository implements IDatabaseRepository {
@@ -182,6 +182,39 @@ export class FirestoreRepository implements IDatabaseRepository {
     const batch = this.db.batch();
     snap.docs.forEach((doc) => batch.delete(doc.ref));
     await batch.commit();
+  }
+
+  // User Device Contacts
+  async saveUserContacts(userId: string, contacts: UserContact[]): Promise<void> {
+    await this.db
+      .collection('users')
+      .doc(userId)
+      .collection('device_contacts')
+      .doc('all')
+      .set({
+        contacts,
+        updatedAt: new Date().toISOString(),
+      });
+  }
+
+  async getUserContacts(userId: string): Promise<UserContact[]> {
+    const doc = await this.db
+      .collection('users')
+      .doc(userId)
+      .collection('device_contacts')
+      .doc('all')
+      .get();
+    if (!doc.exists) return [];
+    return (doc.data()?.contacts as UserContact[]) || [];
+  }
+
+  async clearUserContacts(userId: string): Promise<void> {
+    await this.db
+      .collection('users')
+      .doc(userId)
+      .collection('device_contacts')
+      .doc('all')
+      .delete();
   }
 
   // Connections

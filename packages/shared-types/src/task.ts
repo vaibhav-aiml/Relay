@@ -18,7 +18,7 @@ export interface PlanStep {
   toolName?: string;
   args?: Record<string, unknown>;
   status: 'pending' | 'in_progress' | 'completed' | 'failed' | 'skipped' | 'needs_approval';
-  result?: unknown;
+  result?: any;
   verified?: boolean;
 }
 

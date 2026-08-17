@@ -11,11 +11,14 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@relay/config": "*",
     "@relay/shared-types": "*",
     "expo": "^54.0.0",
     "expo-av": "~16.0.8",
     "expo-constants": "~18.0.13",
+    "expo-contacts": "~15.0.11",
+    "expo-file-system": "~19.0.23",
     "expo-linking": "~8.0.12",
     "expo-router": "~6.0.24",
     "expo-speech": "~14.0.8",

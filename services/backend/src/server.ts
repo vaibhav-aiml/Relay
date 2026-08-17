@@ -11,6 +11,7 @@ import { approvalRoutes } from './api/approvals.js';
 import { voiceRoutes } from './api/voice.js';
 import { connectionRoutes } from './api/connections.js';
 import { memoryRoutes } from './api/memory.js';
+import { contactsRoutes } from './api/contacts.js';
 
 dotenv.config();
 
@@ -68,6 +69,8 @@ export function createServer(): FastifyInstance {
   app.register(voiceRoutes, { prefix: '/api/voice' });
   app.register(connectionRoutes, { prefix: '/api/connections' });
   app.register(memoryRoutes, { prefix: '/api/memory' });
+  app.register(contactsRoutes, { prefix: '/api/contacts' });
 
   return app;
 }
+

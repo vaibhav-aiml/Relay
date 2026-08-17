@@ -10,8 +10,17 @@ export interface UserSettings {
   autoApproveLowRisk: boolean;
 }
 
+export interface UserContact {
+  id?: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  relation?: string;
+}
+
 export interface User {
   id: string;
   profile: UserProfile;
   settings: UserSettings;
 }
+

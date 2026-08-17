@@ -46,4 +46,30 @@ describe('Tools & Zod Validation Unit Tests', () => {
     expect(result.output.contacts.length).toBeGreaterThan(0);
     expect(result.output.contacts[0].email).toBe('rahul@example.com');
   });
+
+  test('contacts.search prioritizes synced device contacts over mock contacts', async () => {
+    // Save real device contact
+    await db.saveUserContacts('test-user-custom', [
+      { name: 'Siddharth Roy', phone: '+91 99001 12233', email: 'siddharth@example.com' },
+      { name: 'Rahul Sharma (Real Phone)', phone: '+91 91234 56789', email: 'rahul.real@example.com' },
+    ]);
+
+    const result = await registry.executeWithGuards(
+      'contacts.search',
+      { query: 'Rahul', maxResults: 5 },
+      { userId: 'test-user-custom', taskId: 'task-4', db }
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.verified).toBe(true);
+    expect(result.output.contacts.length).toBe(1);
+    expect(result.output.contacts[0].name).toBe('Rahul Sharma (Real Phone)');
+    expect(result.output.contacts[0].phone).toBe('+91 91234 56789');
+
+    // Test clear synced contacts
+    await db.clearUserContacts('test-user-custom');
+    const clearedContacts = await db.getUserContacts('test-user-custom');
+    expect(clearedContacts).toHaveLength(0);
+  });
 });
+
