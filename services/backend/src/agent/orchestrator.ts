@@ -272,10 +272,80 @@ export class AgentOrchestrator {
       step.verified = executionResult.verified;
     }
 
+    // Auto-save food preference to memory for repeat "order my usual" queries
+    if (approval.toolName === 'food.prepareOrder' && approval.args) {
+      try {
+        const item = String(approval.args.itemName || 'Food Item');
+        const rest = String(approval.args.restaurantName || 'Restaurant');
+        const plat = String(approval.args.platform || 'delivery app');
+        const price = approval.args.estimatedPrice ? `~₹${approval.args.estimatedPrice}` : '';
+        const isCoffee = item.toLowerCase().includes('coffee');
+        const memKey = isCoffee ? 'usual_coffee' : `favorite_${item.toLowerCase().replace(/[^\w]/g, '_').slice(0, 20)}`;
+        await this.db.saveMemory({
+          userId: user.id,
+          key: memKey,
+          value: `${item} from ${rest} on ${plat.toUpperCase()} (${price})`,
+          category: 'preference',
+          source: 'inferred',
+          userApproved: true,
+        });
+      } catch (memErr) {
+        // Non-blocking memory update
+      }
+    }
+
     task.status = 'EXECUTING';
     await this.db.saveTask(task);
 
     // Continue the agent loop
+    return this.runTask(task, user, customPlanner);
+  }
+
+  /**
+   * Resumes a completed task that asked a follow-up question, incorporating user feedback.
+   */
+  public async continueTaskWithReply(
+    taskId: string,
+    reply: string,
+    user: User,
+    customPlanner?: Planner
+  ): Promise<Task> {
+    const task = await this.db.getTask(user.id, taskId);
+    if (!task) throw new Error(`Task ${taskId} not found`);
+
+    const now = new Date().toISOString();
+    const history = task.followUpHistory || [];
+
+    // If there was a previous final answer, record it in conversation history
+    if (task.finalAnswer) {
+      history.push({
+        role: 'assistant',
+        content: task.finalAnswer,
+        timestamp: task.completedAt || now,
+      });
+    }
+
+    // Record the user's clarification / reply
+    history.push({
+      role: 'user',
+      content: reply.trim(),
+      timestamp: now,
+    });
+
+    task.followUpHistory = history;
+    task.finalAnswer = undefined;
+    task.status = 'PLANNING';
+    task.updatedAt = now;
+
+    await this.db.saveTask(task);
+    await this.db.logEvent({
+      taskId: task.id,
+      type: 'status_change',
+      status: 'started',
+      message: `User replied to continue mission: "${reply.trim()}"`,
+      safeMetadata: { reply: reply.trim() },
+    });
+
     return this.runTask(task, user, customPlanner);
   }
 

@@ -5,3 +5,5 @@ export * from './web.js';
 export * from './tasks.js';
 export * from './memory.js';
 export * from './telephony.js';
+export * from './messaging.js';
+export * from './food.js';

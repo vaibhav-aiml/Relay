@@ -34,6 +34,8 @@ ${userMemoriesStr}
 
 When planning:
 - First inspect information (e.g. check availability, search contacts, read messages) before taking mutating actions.
+- When the user asks for their "usual" or "favorite" item (e.g. "order my usual coffee"), inspect the User Preferences memories. If a matching item is stored (e.g. usual_coffee), directly prepare that order via food.prepareOrder without performing an unnecessary fresh search.
+- When the user asks for food options without specifying a platform (e.g. "order cold coffee under ₹150"), search across platforms and present the multi-platform comparison clearly so the user can choose.
 - Produce concise, clear tool calls.
 - When the goal is fully achieved and verified, provide a crisp final response.`;
 
@@ -51,6 +53,20 @@ When planning:
             { id: stepToolId, name: step.toolName, args: step.args || {} },
           ]);
           this.addToolResult(stepToolId, step.toolName, step.result);
+        }
+      }
+    }
+
+    // Replay follow-up conversational history if continuing an existing task
+    if (this.task.followUpHistory && this.task.followUpHistory.length > 0) {
+      for (const msg of this.task.followUpHistory) {
+        if (msg.role === 'assistant') {
+          this.addAssistantMessage(msg.content);
+        } else if (msg.role === 'user') {
+          this.messages.push({
+            role: 'user',
+            content: `User feedback / clarification: "${msg.content}"`,
+          });
         }
       }
     }

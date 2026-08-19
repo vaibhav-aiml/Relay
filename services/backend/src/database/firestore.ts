@@ -1,6 +1,6 @@
 import admin from 'firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
-import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact } from '@relay/shared-types';
+import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact, TaskFilterOptions } from '@relay/shared-types';
 import { IDatabaseRepository } from './types.js';
 
 export class FirestoreRepository implements IDatabaseRepository {
@@ -58,15 +58,81 @@ export class FirestoreRepository implements IDatabaseRepository {
     return updated;
   }
 
-  async listTasks(userId: string, limit: number = 20): Promise<Task[]> {
-    const snap = await this.db
+  async listTasks(userId: string, options: number | TaskFilterOptions = 50): Promise<Task[]> {
+    const opts: TaskFilterOptions = typeof options === 'number' ? { limit: options } : options || {};
+    const limit = opts.limit || 50;
+    const query = opts.query?.toLowerCase().trim() || '';
+    const status = opts.status && opts.status !== 'ALL' ? opts.status : undefined;
+    const tool = opts.tool && opts.tool !== 'ALL' ? opts.tool.toLowerCase() : undefined;
+
+    const baseQuery = this.db
       .collection('users')
       .doc(userId)
       .collection('tasks')
       .orderBy('createdAt', 'desc')
-      .limit(limit)
-      .get();
-    return snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<Task, 'id'>) }));
+      .limit(100);
+
+    const snap = await baseQuery.get();
+    let tasks: Task[] = snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<Task, 'id'>) }));
+
+    // Status filter
+    if (status) {
+      tasks = tasks.filter((t) => t.status === status);
+    }
+
+    // Time horizon filter
+    if (opts.timeHorizon) {
+      const now = Date.now();
+      let horizonCutoff = 0;
+      if (opts.timeHorizon === 'today') {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        horizonCutoff = d.getTime();
+      } else if (opts.timeHorizon === 'week') {
+        horizonCutoff = now - 7 * 24 * 60 * 60 * 1000;
+      } else if (opts.timeHorizon === 'month') {
+        horizonCutoff = now - 30 * 24 * 60 * 60 * 1000;
+      }
+      if (horizonCutoff > 0) {
+        tasks = tasks.filter((t) => new Date(t.createdAt).getTime() >= horizonCutoff);
+      }
+    }
+
+    // Tool / Channel filter (e.g. telephony, messaging, calendar, gmail, web)
+    if (tool) {
+      tasks = tasks.filter((t) =>
+        t.plan?.some((p) => {
+          const toolName = (p.toolName || '').toLowerCase();
+          if (tool === 'messaging') return toolName.includes('whatsapp') || toolName.includes('sms');
+          if (tool === 'telephony') return toolName.includes('call') || toolName.includes('telephony');
+          return toolName.includes(tool);
+        })
+      );
+    }
+
+    // Full-text keyword filter across goal, final answer, plan step descriptions, tool args
+    if (query) {
+      tasks = tasks.filter((t) => {
+        const inGoal = t.goal.toLowerCase().includes(query);
+        const inFinal = (t.finalAnswer || '').toLowerCase().includes(query);
+        const inPlan = t.plan?.some(
+          (p) =>
+            (p.description || '').toLowerCase().includes(query) ||
+            (p.toolName || '').toLowerCase().includes(query) ||
+            JSON.stringify(p.args || {}).toLowerCase().includes(query)
+        );
+        return inGoal || inFinal || inPlan;
+      });
+    }
+
+    return tasks.slice(0, limit);
+  }
+
+  async clearTaskHistory(userId: string): Promise<void> {
+    const snap = await this.db.collection('users').doc(userId).collection('tasks').get();
+    const batch = this.db.batch();
+    snap.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
   }
 
   // Task Events

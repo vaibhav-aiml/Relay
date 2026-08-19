@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { Linking } from 'react-native';
-import { Task, TaskEvent, Connection, Memory, UserContact } from '@relay/shared-types';
+import { Linking, Alert } from 'react-native';
+import { Task, TaskEvent, Connection, Memory, UserContact, TaskFilterOptions } from '@relay/shared-types';
 import { ApiService } from '../services/api';
 import { DeviceContactsService } from '../services/contacts';
 
@@ -21,8 +21,10 @@ interface AppState {
   fetchTask: (taskId: string) => Promise<void>;
   pollTaskUntilDone: (taskId: string) => () => void;
   submitApproval: (approvalId: string, decision: 'approved' | 'denied', reason?: string) => Promise<void>;
+  submitTaskReply: (reply: string) => Promise<void>;
   cancelCurrentTask: () => Promise<void>;
-  fetchTasks: () => Promise<void>;
+  fetchTasks: (filters?: TaskFilterOptions) => Promise<void>;
+  clearTaskHistory: () => Promise<void>;
   fetchConnections: () => Promise<void>;
   fetchMemories: () => Promise<void>;
   addMemory: (key: string, value: string, category?: string) => Promise<void>;
@@ -116,11 +118,99 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
+      // If user approved a WhatsApp message, open WhatsApp deep link
+      if (decision === 'approved' && pending?.toolName === 'messaging.sendWhatsApp') {
+        const rawPhone = String(pending.args?.phoneNumber || '');
+        const msgBody = String(pending.args?.messageBody || '');
+        if (rawPhone) {
+          const clean = rawPhone.replace(/[^\d+]/g, '');
+          const encoded = encodeURIComponent(msgBody);
+          const url = `whatsapp://send?phone=${clean}&text=${encoded}`;
+          Linking.openURL(url).catch(() => {
+            Alert.alert(
+              'WhatsApp Not Found',
+              'WhatsApp is not installed on this device. Please install WhatsApp or use SMS instead.',
+            );
+          });
+        }
+      }
+
+      // If user approved an SMS message, open native SMS app
+      if (decision === 'approved' && pending?.toolName === 'messaging.sendSMS') {
+        const rawPhone = String(pending.args?.phoneNumber || '');
+        const msgBody = String(pending.args?.messageBody || '');
+        if (rawPhone) {
+          const clean = rawPhone.replace(/[^\d+]/g, '');
+          const encoded = encodeURIComponent(msgBody);
+          const url = `sms:${clean}?body=${encoded}`;
+          Linking.openURL(url).catch((e) => {
+            console.warn('Could not open SMS app:', e);
+          });
+        }
+      }
+
+      // If user approved a food order, open the platform deep link (Zomato/Swiggy/Blinkit/Zepto) with automatic web fallback
+      if (decision === 'approved' && pending?.toolName === 'food.prepareOrder') {
+        const deepLinkUrl = String(pending.args?.deepLinkUrl || '');
+        const webFallbackUrl = String(pending.args?.webFallbackUrl || '');
+        const platformName = String(pending.args?.platform || 'Food Delivery App');
+
+        (async () => {
+          try {
+            if (deepLinkUrl) {
+              const canOpen = await Linking.canOpenURL(deepLinkUrl).catch(() => false);
+              if (canOpen) {
+                await Linking.openURL(deepLinkUrl);
+                return;
+              }
+            }
+
+            // Fallback automatically to web URL if native app is not installed or cannot open
+            if (webFallbackUrl) {
+              await Linking.openURL(webFallbackUrl);
+            } else {
+              Alert.alert(
+                `${platformName} Not Found`,
+                `Please install ${platformName} or check your internet connection.`,
+              );
+            }
+          } catch (err) {
+            // If native deep link fails with ActivityNotFoundException, open web fallback
+            if (webFallbackUrl) {
+              Linking.openURL(webFallbackUrl).catch(() => {
+                Alert.alert(
+                  `Could Not Open ${platformName}`,
+                  `Unable to open ${platformName} app or web browser.`,
+                );
+              });
+            } else {
+              Alert.alert(
+                `${platformName} Not Found`,
+                `Please install ${platformName} to view this item.`,
+              );
+            }
+          }
+        })();
+      }
+
       await ApiService.submitApprovalDecision(approvalId, decision, reason);
       if (current) {
         get().pollTaskUntilDone(current.id);
       }
       set({ isLoading: false });
+    } catch (err: any) {
+      set({ error: err.message, isLoading: false });
+    }
+  },
+
+  submitTaskReply: async (reply: string) => {
+    const current = get().currentTask;
+    if (!current) return;
+    try {
+      set({ isLoading: true, error: null });
+      const { task } = await ApiService.submitTaskReply(current.id, reply);
+      set({ currentTask: task, isLoading: false });
+      get().pollTaskUntilDone(task.id);
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
     }
@@ -137,10 +227,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  fetchTasks: async () => {
+  fetchTasks: async (filters?: TaskFilterOptions) => {
     try {
-      const { tasks } = await ApiService.listTasks();
-      set({ tasks });
+      const { tasks } = await ApiService.listTasks(filters);
+      set({ tasks: tasks || [] });
+    } catch (err: any) {
+      set({ error: err.message });
+    }
+  },
+
+  clearTaskHistory: async () => {
+    try {
+      await ApiService.clearTaskHistory();
+      set({ tasks: [] });
     } catch (err: any) {
       set({ error: err.message });
     }

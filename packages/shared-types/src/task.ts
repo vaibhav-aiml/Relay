@@ -34,6 +34,12 @@ export interface TaskEvent {
   safeMetadata: Record<string, unknown>; // Never contains full raw bodies or tokens
 }
 
+export interface TaskMessage {
+  role: 'assistant' | 'user';
+  content: string;
+  timestamp: string;
+}
+
 export interface Task {
   id: string;
   userId: string;
@@ -48,4 +54,6 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+  followUpHistory?: TaskMessage[];
 }
+

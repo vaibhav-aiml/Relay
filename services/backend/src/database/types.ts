@@ -1,4 +1,4 @@
-import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact } from '@relay/shared-types';
+import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact, TaskFilterOptions } from '@relay/shared-types';
 
 export interface IDatabaseRepository {
   // Users
@@ -8,7 +8,8 @@ export interface IDatabaseRepository {
   // Tasks
   getTask(userId: string, taskId: string): Promise<Task | null>;
   saveTask(task: Task): Promise<Task>;
-  listTasks(userId: string, limit?: number): Promise<Task[]>;
+  listTasks(userId: string, options?: number | TaskFilterOptions): Promise<Task[]>;
+  clearTaskHistory?(userId: string): Promise<void>;
 
   // Task Events
   logEvent(event: Omit<TaskEvent, 'id' | 'timestamp'>): Promise<TaskEvent>;

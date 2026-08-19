@@ -18,6 +18,12 @@ export const CAPABILITY_RISK_MAP: Record<string, { riskLevel: RiskLevel; descrip
   // Contacts & Telephony
   'contacts.search': { riskLevel: 'LOW', description: 'Search Google Contacts', requiresConfirmation: false },
   'telephony.makeCall': { riskLevel: 'HIGH', description: 'Initiate a phone call to a contact', requiresConfirmation: true },
+  'messaging.sendWhatsApp': { riskLevel: 'HIGH', description: 'Send a WhatsApp message to a contact via device deep link', requiresConfirmation: true },
+  'messaging.sendSMS': { riskLevel: 'HIGH', description: 'Send an SMS text message to a contact via device deep link', requiresConfirmation: true },
+
+  // Food Ordering & Discovery
+  'food.searchOptions': { riskLevel: 'LOW', description: 'Search food delivery items and estimate prices within budget', requiresConfirmation: false },
+  'food.prepareOrder': { riskLevel: 'CRITICAL', description: 'Prepare a food delivery order and open the delivery app for user confirmation', requiresConfirmation: true },
 
   // Calendar capabilities
   'calendar.findAvailability': { riskLevel: 'MEDIUM', description: 'Inspect free/busy schedule slots', requiresConfirmation: false },

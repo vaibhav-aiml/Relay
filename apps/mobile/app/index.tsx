@@ -22,6 +22,10 @@ import { useAppStore } from '../store/useAppStore';
 const QUICK_PROMPTS = [
   'Call Rahul',
   'Call Mom to say I will be late for dinner',
+  'WhatsApp Rahul saying I will be 10 minutes late',
+  'Send an SMS to Mom that I reached safely',
+  'Order a cold coffee under ₹150 from Zomato',
+  'Find pizza options between ₹100-200 on Swiggy',
   'Find 30m with Rahul on Tuesday afternoon and send an invite',
   'Check my unread emails from the team and summarize them',
   'Search the web for the latest updates on autonomous AI agents',

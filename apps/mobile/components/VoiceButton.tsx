@@ -105,7 +105,7 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscribe, disabled
       } else {
         // On native (iOS / Android), use FileSystem to read as base64
         audioBase64 = await FileSystem.readAsStringAsync(uri, {
-          encoding: FileSystem.EncodingType.Base64,
+          encoding: 'base64',
         });
       }
 

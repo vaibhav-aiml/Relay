@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact } from '@relay/shared-types';
+import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact, TaskFilterOptions } from '@relay/shared-types';
 import { IDatabaseRepository } from './types.js';
 
 export class InMemoryRepository implements IDatabaseRepository {
@@ -55,11 +55,78 @@ export class InMemoryRepository implements IDatabaseRepository {
     return updated;
   }
 
-  async listTasks(userId: string, limit: number = 20): Promise<Task[]> {
+  async listTasks(userId: string, options: number | TaskFilterOptions = 50): Promise<Task[]> {
+    const opts: TaskFilterOptions = typeof options === 'number' ? { limit: options } : options || {};
+    const limit = opts.limit || 50;
+    const query = opts.query?.toLowerCase().trim() || '';
+    const status = opts.status && opts.status !== 'ALL' ? opts.status : undefined;
+    const tool = opts.tool && opts.tool !== 'ALL' ? opts.tool.toLowerCase() : undefined;
+
+    // Calculate time horizon cutoff date if requested
+    let horizonCutoff: number | null = null;
+    if (opts.timeHorizon) {
+      const now = Date.now();
+      if (opts.timeHorizon === 'today') {
+        const d = new Date();
+        d.setHours(0, 0, 0, 0);
+        horizonCutoff = d.getTime();
+      } else if (opts.timeHorizon === 'week') {
+        horizonCutoff = now - 7 * 24 * 60 * 60 * 1000;
+      } else if (opts.timeHorizon === 'month') {
+        horizonCutoff = now - 30 * 24 * 60 * 60 * 1000;
+      }
+    }
+
     const userTasks = Array.from(this.tasks.values())
-      .filter((t) => t.userId === userId)
+      .filter((t) => {
+        if (t.userId !== userId) return false;
+
+        // Status filter
+        if (status && t.status !== status) return false;
+
+        // Tool / Channel filter (e.g. telephony, messaging, calendar, gmail, web)
+        if (tool) {
+          const hasTool = t.plan?.some((p) => {
+            const toolName = (p.toolName || '').toLowerCase();
+            if (tool === 'messaging') return toolName.includes('whatsapp') || toolName.includes('sms');
+            if (tool === 'telephony') return toolName.includes('call') || toolName.includes('telephony');
+            return toolName.includes(tool);
+          });
+          if (!hasTool) return false;
+        }
+
+        // Time horizon filter
+        if (horizonCutoff !== null) {
+          const taskTime = new Date(t.createdAt).getTime();
+          if (taskTime < horizonCutoff) return false;
+        }
+
+        // Keyword query filter across goal, final answer, tool names, and step descriptions
+        if (query) {
+          const inGoal = t.goal.toLowerCase().includes(query);
+          const inFinal = (t.finalAnswer || '').toLowerCase().includes(query);
+          const inPlan = t.plan?.some(
+            (p) =>
+              (p.description || '').toLowerCase().includes(query) ||
+              (p.toolName || '').toLowerCase().includes(query) ||
+              JSON.stringify(p.args || {}).toLowerCase().includes(query)
+          );
+          if (!inGoal && !inFinal && !inPlan) return false;
+        }
+
+        return true;
+      })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
     return userTasks.slice(0, limit);
+  }
+
+  async clearTaskHistory(userId: string): Promise<void> {
+    for (const [id, task] of this.tasks.entries()) {
+      if (task.userId === userId) {
+        this.tasks.delete(id);
+      }
+    }
   }
 
   // Task Events

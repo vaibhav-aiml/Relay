@@ -52,11 +52,36 @@ export async function taskRoutes(app: FastifyInstance) {
     return reply.status(201).send({ task });
   });
 
-  // List tasks for current user
-  app.get('/', async (req, reply) => {
+  // List & Search tasks for current user
+  app.get<{
+    Querystring: {
+      q?: string;
+      status?: string;
+      tool?: string;
+      timeHorizon?: 'all' | 'today' | 'week' | 'month';
+      limit?: number;
+    };
+  }>('/', async (req, reply) => {
     const user = (req as AuthenticatedRequest).user;
-    const tasks = await db.listTasks(user.id, 50);
-    return reply.send({ tasks });
+    const { q, status, tool, timeHorizon, limit } = req.query;
+
+    const tasks = await db.listTasks(user.id, {
+      query: q,
+      status,
+      tool,
+      timeHorizon,
+      limit: limit ? Number(limit) : 50,
+    });
+    return reply.send({ tasks, total: tasks.length });
+  });
+
+  // Clear all task history for current user
+  app.delete('/history', async (req, reply) => {
+    const user = (req as AuthenticatedRequest).user;
+    if (db.clearTaskHistory) {
+      await db.clearTaskHistory(user.id);
+    }
+    return reply.send({ success: true, message: 'Task history cleared successfully' });
   });
 
   // Get task by ID with full event trace
@@ -105,5 +130,30 @@ export async function taskRoutes(app: FastifyInstance) {
     });
 
     return reply.send({ task });
+  });
+
+  // Reply / Follow-up to continue a completed task
+  app.post<{ Params: { id: string }; Body: { reply: string } }>('/:id/reply', async (req, reply) => {
+    const user = (req as AuthenticatedRequest).user;
+    const { id } = req.params;
+    const { reply: userReply } = req.body || {};
+
+    if (!userReply || typeof userReply !== 'string' || !userReply.trim()) {
+      return reply.status(400).send({ error: 'Reply text is required' });
+    }
+
+    const task = await db.getTask(user.id, id);
+    if (!task) {
+      return reply.status(404).send({ error: 'Task not found' });
+    }
+
+    // Run orchestrator continuation asynchronously
+    orchestrator.continueTaskWithReply(id, userReply.trim(), user).catch((err) => {
+      req.log.error({ err, taskId: id }, 'Agent continuation loop encountered error');
+    });
+
+    // Return the updated task immediately in PLANNING status
+    const updatedTask = await db.getTask(user.id, id);
+    return reply.send({ task: updatedTask || task, message: 'Follow-up submitted successfully' });
   });
 }

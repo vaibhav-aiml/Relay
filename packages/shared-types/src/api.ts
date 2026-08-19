@@ -11,9 +11,33 @@ export interface CreateTaskResponse {
   task: Task;
 }
 
+export interface TaskFilterOptions {
+  query?: string;
+  status?: string;
+  tool?: string;
+  timeHorizon?: 'all' | 'today' | 'week' | 'month';
+  fromDate?: string;
+  toDate?: string;
+  limit?: number;
+}
+
+export interface ListTasksResponse {
+  tasks: Task[];
+  total?: number;
+}
+
 export interface GetTaskResponse {
   task: Task;
   events: TaskEvent[];
+}
+
+export interface TaskReplyRequest {
+  reply: string;
+}
+
+export interface TaskReplyResponse {
+  task: Task;
+  message?: string;
 }
 
 export interface ApprovalDecisionRequest {

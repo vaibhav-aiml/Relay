@@ -48,3 +48,10 @@ export const calendarUpdateEventSchema = z.object({
   idempotencyKey: z.string().min(8).describe('Unique idempotency key'),
 });
 export type CalendarUpdateEventInput = z.infer<typeof calendarUpdateEventSchema>;
+
+export const calendarDeleteEventSchema = z.object({
+  eventId: z.string().min(1).describe('The ID of the calendar event to delete permanently'),
+  summary: z.string().optional().describe('Title of the event being deleted for user confirmation'),
+  idempotencyKey: z.string().optional().describe('Unique idempotency key'),
+});
+export type CalendarDeleteEventInput = z.infer<typeof calendarDeleteEventSchema>;

@@ -1,7 +1,26 @@
-import { Task, TaskEvent, Approval, Connection, Memory, HealthResponse, UserContact } from '@relay/shared-types';
+import { Task, TaskEvent, Approval, Connection, Memory, HealthResponse, UserContact, TaskFilterOptions } from '@relay/shared-types';
+import Constants from 'expo-constants';
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_API_URL || 'http://localhost:4000';
+const getBaseUrl = (): string => {
+  // 1. Try to dynamically detect the Metro bundler IP (works on physical devices over Wi-Fi/LAN)
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
+      return `http://${ip}:4000`;
+    }
+  }
 
+  // 2. Fall back to environment variable if configured
+  if (process.env.EXPO_PUBLIC_BACKEND_API_URL) {
+    return process.env.EXPO_PUBLIC_BACKEND_API_URL;
+  }
+
+  // 3. Active LAN fallback
+  return 'http://192.168.1.5:4000';
+};
+
+const BASE_URL = getBaseUrl();
 
 export class ApiService {
   private static authToken: string | null = null;
@@ -46,8 +65,23 @@ export class ApiService {
     });
   }
 
-  public static async listTasks(): Promise<{ tasks: Task[] }> {
-    return this.request<{ tasks: Task[] }>('/api/tasks');
+  public static async listTasks(filters?: TaskFilterOptions): Promise<{ tasks: Task[]; total?: number }> {
+    const params = new URLSearchParams();
+    if (filters?.query) params.append('q', filters.query);
+    if (filters?.status && filters.status !== 'ALL') params.append('status', filters.status);
+    if (filters?.tool && filters.tool !== 'ALL') params.append('tool', filters.tool);
+    if (filters?.timeHorizon && filters.timeHorizon !== 'all') params.append('timeHorizon', filters.timeHorizon);
+    if (filters?.limit) params.append('limit', String(filters.limit));
+
+    const qs = params.toString();
+    const endpoint = qs ? `/api/tasks?${qs}` : '/api/tasks';
+    return this.request<{ tasks: Task[]; total?: number }>(endpoint);
+  }
+
+  public static async clearTaskHistory(): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>('/api/tasks/history', {
+      method: 'DELETE',
+    });
   }
 
   public static async getTask(taskId: string): Promise<{ task: Task; events: TaskEvent[] }> {
@@ -58,6 +92,13 @@ export class ApiService {
     return this.request<{ task: Task }>(`/api/tasks/${taskId}/cancel`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
+    });
+  }
+
+  public static async submitTaskReply(taskId: string, reply: string): Promise<{ task: Task; message?: string }> {
+    return this.request<{ task: Task; message?: string }>(`/api/tasks/${taskId}/reply`, {
+      method: 'POST',
+      body: JSON.stringify({ reply }),
     });
   }
 

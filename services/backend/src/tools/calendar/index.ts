@@ -4,10 +4,12 @@ import {
   calendarListEventsSchema,
   calendarCreateEventSchema,
   calendarUpdateEventSchema,
+  calendarDeleteEventSchema,
   CalendarFindAvailabilityInput,
   CalendarListEventsInput,
   CalendarCreateEventInput,
   CalendarUpdateEventInput,
+  CalendarDeleteEventInput,
 } from '@relay/tool-schemas';
 import { ToolDefinition, ExecutionContext } from '../types.js';
 import { GoogleOAuthService } from '../../integrations/googleOAuth.js';
@@ -268,3 +270,68 @@ export const calendarUpdateEventTool: ToolDefinition<CalendarUpdateEventInput> =
     return Boolean(output && output.id);
   },
 };
+
+export const calendarDeleteEventTool: ToolDefinition<CalendarDeleteEventInput> = {
+  name: 'calendar.deleteEvent',
+  description: 'Permanently delete an existing calendar event from Google Calendar. CRITICAL risk action requiring explicit user confirmation.',
+  inputSchema: calendarDeleteEventSchema,
+  riskLevel: 'CRITICAL',
+  requiredPermission: 'calendar.deleteEvent',
+  idempotencyKeyFn: (input) => input.idempotencyKey || `delete-${input.eventId}`,
+  timeoutMs: 15_000,
+  retryPolicy: { maxRetries: 1, backoffMs: 1500 },
+  execute: async (input: CalendarDeleteEventInput, ctx: ExecutionContext) => {
+    const connection = await ctx.db.getConnection(ctx.userId, 'google');
+
+    if (connection && process.env.GOOGLE_CLIENT_ID) {
+      const auth = GoogleOAuthService.createOAuthClient();
+      const tokens = GoogleOAuthService.decryptTokens(connection.encryptedCredentialRef);
+      auth.setCredentials(tokens);
+      const calendar = google.calendar({ version: 'v3', auth });
+
+      await calendar.events.delete({
+        calendarId: 'primary',
+        eventId: input.eventId,
+      });
+
+      return {
+        id: input.eventId,
+        deleted: true,
+        summary: input.summary || 'Event',
+        message: `Successfully deleted calendar event ${input.eventId}`,
+      };
+    }
+
+    const existed = mockCalendarEvents.has(input.eventId);
+    const existingSummary = mockCalendarEvents.get(input.eventId)?.summary || input.summary || 'Event';
+    mockCalendarEvents.delete(input.eventId);
+
+    return {
+      id: input.eventId,
+      deleted: true,
+      summary: existingSummary,
+      message: existed
+        ? `Successfully deleted calendar event "${existingSummary}" (${input.eventId})`
+        : `Calendar event ${input.eventId} marked as deleted`,
+    };
+  },
+  verify: async (output, ctx) => {
+    if (!output || !output.deleted) return false;
+    const connection = await ctx.db.getConnection(ctx.userId, 'google');
+    if (connection && process.env.GOOGLE_CLIENT_ID) {
+      try {
+        const auth = GoogleOAuthService.createOAuthClient();
+        const tokens = GoogleOAuthService.decryptTokens(connection.encryptedCredentialRef);
+        auth.setCredentials(tokens);
+        const calendar = google.calendar({ version: 'v3', auth });
+        const check = await calendar.events.get({ calendarId: 'primary', eventId: output.id });
+        return check.data.status === 'cancelled';
+      } catch (e: any) {
+        // 404 or 410 Gone means successfully deleted
+        return e.code === 404 || e.code === 410;
+      }
+    }
+    return !mockCalendarEvents.has(output.id);
+  },
+};
+

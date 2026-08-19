@@ -1,12 +1,42 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
 import { Task, TaskStatus } from '@relay/shared-types';
-import { CheckCircle2, AlertCircle, Clock, Ban, Cpu } from 'lucide-react-native';
+import { CheckCircle2, AlertCircle, Clock, Ban, Cpu, ExternalLink, Utensils, HelpCircle } from 'lucide-react-native';
 
 interface TaskStatusLiveProps {
   task: Task;
   onCancel?: () => void;
 }
+
+export interface DiscoveredOption {
+  itemName: string;
+  restaurantName: string;
+  estimatedPrice: number;
+  currency: string;
+  platform: string;
+  rating?: number;
+  isWithinBudget?: boolean;
+  deepLinkUrl: string;
+  webFallbackUrl: string;
+  disclaimer?: string;
+}
+
+export const extractDiscoveredOptions = (task: Task): DiscoveredOption[] => {
+  const list: DiscoveredOption[] = [];
+  if (!task.plan) return list;
+
+  for (const step of task.plan) {
+    if (step.toolName === 'food.searchOptions' && Array.isArray(step.result?.options)) {
+      for (const opt of step.result.options) {
+        // avoid exact duplicates
+        if (!list.some((existing) => existing.itemName === opt.itemName && existing.platform === opt.platform)) {
+          list.push(opt);
+        }
+      }
+    }
+  }
+  return list;
+};
 
 export const TaskStatusLive: React.FC<TaskStatusLiveProps> = ({ task, onCancel }) => {
   const getStatusMeta = (status: TaskStatus) => {
@@ -32,6 +62,49 @@ export const TaskStatusLive: React.FC<TaskStatusLiveProps> = ({ task, onCancel }
   const IconComponent = meta.icon;
   const isRunning = task.status === 'PLANNING' || task.status === 'EXECUTING' || task.status === 'UNDERSTANDING';
 
+  const discoveredOptions = extractDiscoveredOptions(task);
+
+  const getPlatformColors = (platform: string) => {
+    switch (platform.toLowerCase()) {
+      case 'swiggy':
+        return { color: '#fc8019', bg: 'rgba(252, 128, 25, 0.15)', name: 'Swiggy' };
+      case 'blinkit':
+        return { color: '#f8cb46', bg: 'rgba(248, 203, 70, 0.15)', name: 'Blinkit' };
+      case 'zepto':
+        return { color: '#8800ec', bg: 'rgba(136, 0, 236, 0.15)', name: 'Zepto' };
+      case 'zomato':
+      default:
+        return { color: '#e23744', bg: 'rgba(226, 55, 68, 0.15)', name: 'Zomato' };
+    }
+  };
+
+  const handleOpenOption = async (opt: DiscoveredOption) => {
+    try {
+      if (opt.deepLinkUrl) {
+        const canOpen = await Linking.canOpenURL(opt.deepLinkUrl).catch(() => false);
+        if (canOpen) {
+          await Linking.openURL(opt.deepLinkUrl);
+          return;
+        }
+      }
+      if (opt.webFallbackUrl) {
+        await Linking.openURL(opt.webFallbackUrl);
+      }
+    } catch {
+      if (opt.webFallbackUrl) {
+        Linking.openURL(opt.webFallbackUrl);
+      }
+    }
+  };
+
+  const isQuestionAnswer =
+    task.finalAnswer &&
+    (task.finalAnswer.includes('?') ||
+      task.finalAnswer.toLowerCase().includes('would you like') ||
+      task.finalAnswer.toLowerCase().includes('should i') ||
+      task.finalAnswer.toLowerCase().includes('which one') ||
+      task.finalAnswer.toLowerCase().includes('proceed'));
+
   return (
     <View style={styles.container}>
       <View style={styles.topRow}>
@@ -51,10 +124,67 @@ export const TaskStatusLive: React.FC<TaskStatusLiveProps> = ({ task, onCancel }
 
       <Text style={styles.goalText}>{task.goal}</Text>
 
+      {/* Verified Final Answer or Agent Clarification Question */}
       {task.finalAnswer && (
-        <View style={styles.finalAnswerBox}>
-          <Text style={styles.finalAnswerLabel}>Verified Agent Summary</Text>
+        <View
+          style={[
+            styles.finalAnswerBox,
+            isQuestionAnswer && { borderColor: 'rgba(245, 158, 11, 0.4)', backgroundColor: 'rgba(245, 158, 11, 0.08)' },
+          ]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            {isQuestionAnswer ? (
+              <HelpCircle size={14} color="#f59e0b" />
+            ) : (
+              <CheckCircle2 size={14} color="#10b981" />
+            )}
+            <Text
+              style={[
+                styles.finalAnswerLabel,
+                isQuestionAnswer && { color: '#fbbf24' },
+              ]}
+            >
+              {isQuestionAnswer ? 'Agent Question / Clarification' : 'Verified Agent Summary'}
+            </Text>
+          </View>
           <Text style={styles.finalAnswerText}>{task.finalAnswer}</Text>
+        </View>
+      )}
+
+      {/* Discovered Items with Tappable Deep Links (Bug 1 Fix) */}
+      {discoveredOptions.length > 0 && (
+        <View style={styles.optionsContainer}>
+          <Text style={styles.optionsSectionTitle}>
+            Discovered Options ({discoveredOptions.length}) — Tap to view in App or Web:
+          </Text>
+          {discoveredOptions.map((opt, idx) => {
+            const plat = getPlatformColors(opt.platform);
+            return (
+              <View key={idx} style={styles.optionCard}>
+                <View style={styles.optionInfo}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    <Text style={styles.optionName}>{opt.itemName}</Text>
+                    <View style={[styles.platformBadge, { backgroundColor: plat.bg }]}>
+                      <Text style={[styles.platformBadgeText, { color: plat.color }]}>{plat.name}</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.optionRestaurant}>{opt.restaurantName}</Text>
+                  <Text style={styles.optionPrice}>
+                    {opt.currency === 'INR' ? '₹' : opt.currency} {opt.estimatedPrice}{' '}
+                    <Text style={styles.estimateDisclaimer}>(estimated)</Text>
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.openLinkBtn, { borderColor: plat.color }]}
+                  onPress={() => handleOpenOption(opt)}
+                >
+                  <Text style={[styles.openLinkText, { color: plat.color }]}>View</Text>
+                  <ExternalLink size={13} color={plat.color} />
+                </TouchableOpacity>
+              </View>
+            );
+          })}
         </View>
       )}
 
@@ -132,12 +262,86 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',
-    marginBottom: 4,
   },
   finalAnswerText: {
     color: '#f1f5f9',
     fontSize: 13,
     lineHeight: 19,
+  },
+  optionsContainer: {
+    marginTop: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.7)',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  optionsSectionTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94a3b8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  optionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  optionInfo: {
+    flex: 1,
+    marginRight: 10,
+  },
+  optionName: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+    flexShrink: 1,
+  },
+  platformBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  platformBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  optionRestaurant: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginBottom: 2,
+  },
+  optionPrice: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#10b981',
+  },
+  estimateDisclaimer: {
+    fontSize: 10,
+    color: '#64748b',
+    fontWeight: '400',
+  },
+  openLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  openLinkText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   errorBox: {
     backgroundColor: 'rgba(239, 68, 68, 0.1)',

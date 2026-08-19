@@ -74,15 +74,17 @@ export class PolicyEngine {
         const attendees = Array.isArray(args.attendees) && args.attendees.length > 0
           ? ` with ${args.attendees.join(', ')}`
           : '';
-        return `Create calendar event "${summary}" on ${start}${attendees}`;
+        return `Schedule "${summary}" for ${start}${attendees}`;
       }
       case 'calendar.updateEvent': {
+        const summary = args.summary ? `"${args.summary}" ` : '';
         const eventId = String(args.eventId || '');
-        return `Update calendar event ID ${eventId}`;
+        return `Update calendar event ${summary}(ID: ${eventId})`;
       }
       case 'calendar.deleteEvent': {
+        const summary = args.summary ? `"${args.summary}" ` : '';
         const eventId = String(args.eventId || '');
-        return `Delete calendar event ID ${eventId}`;
+        return `Permanently delete calendar event ${summary}(ID: ${eventId})`;
       }
       case 'telephony.makeCall': {
         const name = String(args.recipientName || 'contact');
@@ -90,8 +92,30 @@ export class PolicyEngine {
         const reason = args.reason ? ` - ${args.reason}` : '';
         return `Call ${name} at ${phone}${reason}`;
       }
+      case 'messaging.sendWhatsApp': {
+        const name = String(args.recipientName || 'contact');
+        const phone = String(args.phoneNumber || '');
+        const body = String(args.messageBody || '');
+        const preview = body.length > 60 ? body.substring(0, 60) + '…' : body;
+        return `Send WhatsApp to ${name} (${phone}): "${preview}"`;
+      }
+      case 'messaging.sendSMS': {
+        const name = String(args.recipientName || 'contact');
+        const phone = String(args.phoneNumber || '');
+        const body = String(args.messageBody || '');
+        const preview = body.length > 60 ? body.substring(0, 60) + '…' : body;
+        return `Send SMS to ${name} (${phone}): "${preview}"`;
+      }
+      case 'food.prepareOrder': {
+        const item = String(args.itemName || 'Food Item');
+        const rest = String(args.restaurantName || 'Restaurant');
+        const price = args.estimatedPrice ? `~₹${args.estimatedPrice} (estimated — confirm in app)` : '';
+        const plat = String(args.platform || 'delivery app').toUpperCase();
+        return `Order "${item}" from ${rest} for ${price} via ${plat}`;
+      }
       default:
         return `Execute action '${toolName}' with provided parameters`;
     }
   }
 }
+

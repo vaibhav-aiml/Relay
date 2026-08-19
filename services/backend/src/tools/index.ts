@@ -4,6 +4,7 @@ import {
   calendarListEventsTool,
   calendarCreateEventTool,
   calendarUpdateEventTool,
+  calendarDeleteEventTool,
 } from './calendar/index.js';
 import {
   gmailSearchMessagesTool,
@@ -13,6 +14,8 @@ import {
 } from './gmail/index.js';
 import { contactsSearchTool } from './contacts/index.js';
 import { telephonyMakeCallTool } from './telephony/index.js';
+import { messagingSendWhatsAppTool, messagingSendSmsTool } from './messaging/index.js';
+import { foodSearchOptionsTool, foodPrepareOrderTool } from './food/index.js';
 import { webSearchTool, webOpenTool } from './web/index.js';
 import { tasksCreateTool, tasksGetStatusTool, tasksCancelTool } from './tasks/index.js';
 import { memorySaveTool, memoryGetTool } from './memory/index.js';
@@ -25,6 +28,7 @@ export function initializeTools(): ToolRegistry {
   registry.register(calendarListEventsTool);
   registry.register(calendarCreateEventTool);
   registry.register(calendarUpdateEventTool);
+  registry.register(calendarDeleteEventTool);
 
   // Gmail
   registry.register(gmailSearchMessagesTool);
@@ -35,6 +39,14 @@ export function initializeTools(): ToolRegistry {
   // Contacts & Telephony
   registry.register(contactsSearchTool);
   registry.register(telephonyMakeCallTool);
+
+  // Messaging (WhatsApp & SMS)
+  registry.register(messagingSendWhatsAppTool);
+  registry.register(messagingSendSmsTool);
+
+  // Food Ordering & Discovery (Zomato / Swiggy / Blinkit / Zepto)
+  registry.register(foodSearchOptionsTool);
+  registry.register(foodPrepareOrderTool);
 
   // Web
   registry.register(webSearchTool);
