@@ -3,7 +3,7 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Slot, Tabs } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Home, History, Link, Settings } from 'lucide-react-native';
+import { Home, History, Clock, Settings } from 'lucide-react-native';
 
 export default function RootLayout() {
   return (
@@ -26,6 +26,13 @@ export default function RootLayout() {
           }}
         />
         <Tabs.Screen
+          name="schedules"
+          options={{
+            title: 'Routines',
+            tabBarIcon: ({ color, size }) => <Clock size={size || 20} color={color} />,
+          }}
+        />
+        <Tabs.Screen
           name="history"
           options={{
             title: 'History',
@@ -33,17 +40,16 @@ export default function RootLayout() {
           }}
         />
         <Tabs.Screen
-          name="connections"
-          options={{
-            title: 'Integrations',
-            tabBarIcon: ({ color, size }) => <Link size={size || 20} color={color} />,
-          }}
-        />
-        <Tabs.Screen
           name="settings"
           options={{
             title: 'Settings',
             tabBarIcon: ({ color, size }) => <Settings size={size || 20} color={color} />,
+          }}
+        />
+        <Tabs.Screen
+          name="connections"
+          options={{
+            href: null, // Hidden from bottom tabs (accessible via Settings)
           }}
         />
         <Tabs.Screen
@@ -56,6 +62,7 @@ export default function RootLayout() {
     </View>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {

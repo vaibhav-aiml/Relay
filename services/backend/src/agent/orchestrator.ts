@@ -115,7 +115,23 @@ export class AgentOrchestrator {
             return currentTask;
           }
 
-          if (policy.decision === 'NEEDS_CONFIRMATION') {
+          // Check auto-approval whitelist for autonomous routines (bypasses pause ONLY for whitelisted tools)
+          const isPreApproved =
+            Boolean(currentTask.autoApproveRoutine) &&
+            Array.isArray(currentTask.preApprovedTools) &&
+            currentTask.preApprovedTools.includes(toolCall.name);
+
+          if (policy.decision === 'NEEDS_CONFIRMATION' && isPreApproved) {
+            await this.db.logEvent({
+              taskId: currentTask.id,
+              type: 'approval_decision',
+              tool: toolDef.name,
+              status: 'succeeded',
+              message: `Auto-approved "${toolCall.name}" via routine pre-approved permissions whitelist`,
+              safeMetadata: { autoApproved: true, tool: toolCall.name },
+            });
+            // Fall through to execution directly!
+          } else if (policy.decision === 'NEEDS_CONFIRMATION') {
             // Create pending Approval record
             const description = PolicyEngine.formatApprovalDescription(toolCall.name, toolCall.args);
             const approval = await this.db.createApproval({
@@ -144,6 +160,7 @@ export class AgentOrchestrator {
             await this.db.saveTask(currentTask);
             return currentTask; // Pause loop until user approval
           }
+
 
           // 5. Execute Tool with Guards
           await this.db.logEvent({

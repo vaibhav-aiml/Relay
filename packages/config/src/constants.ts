@@ -38,14 +38,18 @@ export const CAPABILITY_RISK_MAP: Record<string, { riskLevel: RiskLevel; descrip
   'gmail.draftMessage': { riskLevel: 'MEDIUM', description: 'Create an email draft in Gmail without sending', requiresConfirmation: false },
   'gmail.sendMessage': { riskLevel: 'HIGH', description: 'Send an email directly from Gmail', requiresConfirmation: true },
 
-  // Tasks meta-capabilities
+  // Tasks & Schedules meta-capabilities
   'tasks.create': { riskLevel: 'LOW', description: 'Create an autonomous subtask', requiresConfirmation: false },
   'tasks.getStatus': { riskLevel: 'LOW', description: 'Check status of an active task', requiresConfirmation: false },
   'tasks.cancel': { riskLevel: 'LOW', description: 'Cancel an active task', requiresConfirmation: false },
+  'tasks.schedule': { riskLevel: 'LOW', description: 'Schedule a future task or recurring routine', requiresConfirmation: false },
+  'tasks.listScheduled': { riskLevel: 'LOW', description: 'List scheduled tasks and routines', requiresConfirmation: false },
+  'tasks.cancelScheduled': { riskLevel: 'LOW', description: 'Cancel or delete a scheduled routine', requiresConfirmation: false },
 
   // Memory
   'memory.save': { riskLevel: 'LOW', description: 'Store a user stated preference', requiresConfirmation: false },
   'memory.get': { riskLevel: 'LOW', description: 'Retrieve user preferences', requiresConfirmation: false },
+
 };
 
 export const GOOGLE_SCOPES = {

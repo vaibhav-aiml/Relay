@@ -68,3 +68,150 @@ export const tasksCancelTool: ToolDefinition<TasksCancelInput> = {
   },
   verify: async (output) => output.status === 'CANCELLED',
 };
+
+import {
+  tasksScheduleSchema,
+  tasksListScheduledSchema,
+  tasksCancelScheduledSchema,
+  TasksScheduleInput,
+  TasksListScheduledInput,
+  TasksCancelScheduledInput,
+} from '@relay/tool-schemas';
+import { v4 as uuidv4 } from 'uuid';
+import { ScheduledRoutine } from '@relay/shared-types';
+import { buildCronFromPreset, getNextRun, parseWhenToSchedule, isValidCron } from '../../scheduler/cronEvaluator.js';
+
+export const tasksScheduleTool: ToolDefinition<TasksScheduleInput> = {
+  name: 'tasks.schedule',
+  description: 'Schedule a new future one-time task or recurring routine (e.g. daily morning briefing, evening dinner reminder).',
+  inputSchema: tasksScheduleSchema,
+  riskLevel: 'LOW',
+  requiredPermission: 'tasks.schedule',
+  timeoutMs: 10_000,
+  retryPolicy: { maxRetries: 1, backoffMs: 500 },
+  execute: async (input: TasksScheduleInput, ctx: ExecutionContext) => {
+    const user = await ctx.db.getUser(ctx.userId);
+    const timezone = user?.profile?.timezone || 'UTC';
+
+    let cronExpression: string | undefined = input.cronExpression;
+    let scheduledAt: string | undefined = input.scheduledAt;
+    let humanSchedule = '';
+
+    if (input.when) {
+      const parsed = parseWhenToSchedule(input.when, timezone);
+      cronExpression = parsed.cronExpression;
+      scheduledAt = parsed.scheduledAt;
+      humanSchedule = parsed.humanSchedule;
+    } else if (input.frequency || input.time) {
+      const built = buildCronFromPreset(input.frequency, input.time, input.daysOfWeek, input.cronExpression);
+      cronExpression = built.cronExpression;
+      humanSchedule = built.humanSchedule;
+    } else if (input.scheduledAt) {
+      scheduledAt = input.scheduledAt;
+      humanSchedule = `One-time at ${new Date(scheduledAt).toLocaleString()}`;
+    } else if (cronExpression) {
+      if (!isValidCron(cronExpression, timezone)) {
+        throw new Error(`Invalid cron expression: "${cronExpression}"`);
+      }
+      humanSchedule = `Custom cron: ${cronExpression}`;
+    } else {
+      // Default to daily at 9:00 AM
+      const built = buildCronFromPreset('daily', '09:00');
+      cronExpression = built.cronExpression;
+      humanSchedule = built.humanSchedule;
+    }
+
+    let nextRunAt: string;
+    const now = new Date();
+
+    if (input.scheduleType === 'once' || scheduledAt) {
+      nextRunAt = scheduledAt || new Date(now.getTime() + 60 * 60 * 1000).toISOString();
+      scheduledAt = nextRunAt;
+    } else {
+      if (!cronExpression) {
+        cronExpression = '0 9 * * *';
+      }
+      nextRunAt = getNextRun(cronExpression, timezone, now).toISOString();
+    }
+
+    const scheduleId = uuidv4();
+    const nowIso = now.toISOString();
+
+    const routine: ScheduledRoutine = {
+      id: scheduleId,
+      userId: ctx.userId,
+      name: input.name.trim(),
+      goal: input.goal.trim(),
+      scheduleType: input.scheduleType || (scheduledAt ? 'once' : 'recurring'),
+      cronExpression,
+      humanSchedule,
+      scheduledAt,
+      nextRunAt,
+      status: 'active',
+      totalRuns: 0,
+      preApprovedTools: input.preApprovedTools || [],
+      autoApprove: true,
+      notificationType: input.notificationType || 'push_and_run',
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+
+    await ctx.db.saveSchedule(routine);
+
+    return {
+      scheduleId: routine.id,
+      name: routine.name,
+      goal: routine.goal,
+      humanSchedule: routine.humanSchedule,
+      nextRunAt: routine.nextRunAt,
+      status: routine.status,
+    };
+  },
+  verify: async (output) => Boolean(output && output.scheduleId),
+};
+
+export const tasksListScheduledTool: ToolDefinition<TasksListScheduledInput> = {
+  name: 'tasks.listScheduled',
+  description: 'List user routines and scheduled tasks.',
+  inputSchema: tasksListScheduledSchema,
+  riskLevel: 'LOW',
+  requiredPermission: 'tasks.listScheduled',
+  timeoutMs: 5_000,
+  retryPolicy: { maxRetries: 1, backoffMs: 500 },
+  execute: async (input: TasksListScheduledInput, ctx: ExecutionContext) => {
+    const routines = await ctx.db.listSchedules(ctx.userId, input.status);
+    return {
+      schedules: routines.map((r) => ({
+        id: r.id,
+        name: r.name,
+        goal: r.goal,
+        scheduleType: r.scheduleType,
+        humanSchedule: r.humanSchedule,
+        nextRunAt: r.nextRunAt,
+        status: r.status,
+        lastStatus: r.lastStatus,
+      })),
+      total: routines.length,
+    };
+  },
+  verify: async (output) => Array.isArray(output?.schedules),
+};
+
+export const tasksCancelScheduledTool: ToolDefinition<TasksCancelScheduledInput> = {
+  name: 'tasks.cancelScheduled',
+  description: 'Cancel or delete a scheduled routine.',
+  inputSchema: tasksCancelScheduledSchema,
+  riskLevel: 'LOW',
+  requiredPermission: 'tasks.cancelScheduled',
+  timeoutMs: 5_000,
+  retryPolicy: { maxRetries: 1, backoffMs: 500 },
+  execute: async (input: TasksCancelScheduledInput, ctx: ExecutionContext) => {
+    const success = await ctx.db.deleteSchedule(ctx.userId, input.scheduleId);
+    return {
+      scheduleId: input.scheduleId,
+      cancelled: success,
+    };
+  },
+  verify: async (output) => Boolean(output && output.scheduleId),
+};
+

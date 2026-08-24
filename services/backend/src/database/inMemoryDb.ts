@@ -1,10 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
-import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact, TaskFilterOptions } from '@relay/shared-types';
+import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact, TaskFilterOptions, ScheduledRoutine, ScheduleStatus } from '@relay/shared-types';
 import { IDatabaseRepository } from './types.js';
 
 export class InMemoryRepository implements IDatabaseRepository {
   private users: Map<string, User> = new Map();
   private tasks: Map<string, Task> = new Map();
+  private schedules: Map<string, ScheduledRoutine> = new Map();
   private events: Map<string, TaskEvent[]> = new Map();
   private approvals: Map<string, Approval> = new Map();
   private memories: Map<string, Memory[]> = new Map();
@@ -19,6 +20,7 @@ export class InMemoryRepository implements IDatabaseRepository {
         name: 'Chandra Shekhar',
         email: 'chandra@example.com',
         createdAt: new Date().toISOString(),
+        timezone: 'Asia/Kolkata',
       },
       settings: {
         voiceEnabled: true,
@@ -27,6 +29,10 @@ export class InMemoryRepository implements IDatabaseRepository {
       },
     };
     this.users.set(defaultUser.id, defaultUser);
+    this.users.set('user-chandra', {
+      ...defaultUser,
+      id: 'user-chandra',
+    });
   }
 
   // Users
@@ -37,6 +43,14 @@ export class InMemoryRepository implements IDatabaseRepository {
   async saveUser(user: User): Promise<User> {
     this.users.set(user.id, user);
     return user;
+  }
+
+  async updateUserPushToken(userId: string, pushToken: string): Promise<void> {
+    const user = this.users.get(userId);
+    if (user) {
+      user.profile.pushToken = pushToken;
+      this.users.set(userId, user);
+    }
   }
 
   // Tasks
@@ -61,6 +75,7 @@ export class InMemoryRepository implements IDatabaseRepository {
     const query = opts.query?.toLowerCase().trim() || '';
     const status = opts.status && opts.status !== 'ALL' ? opts.status : undefined;
     const tool = opts.tool && opts.tool !== 'ALL' ? opts.tool.toLowerCase() : undefined;
+    const source = opts.source && opts.source !== 'all' ? opts.source : undefined;
 
     // Calculate time horizon cutoff date if requested
     let horizonCutoff: number | null = null;
@@ -83,6 +98,9 @@ export class InMemoryRepository implements IDatabaseRepository {
 
         // Status filter
         if (status && t.status !== status) return false;
+
+        // Source filter (manual vs scheduled)
+        if (source && (t.source || 'manual') !== source) return false;
 
         // Tool / Channel filter (e.g. telephony, messaging, calendar, gmail, web)
         if (tool) {
@@ -120,6 +138,48 @@ export class InMemoryRepository implements IDatabaseRepository {
 
     return userTasks.slice(0, limit);
   }
+
+  // Schedules & Routines
+  async saveSchedule(schedule: ScheduledRoutine): Promise<ScheduledRoutine> {
+    const updated: ScheduledRoutine = {
+      ...schedule,
+      updatedAt: new Date().toISOString(),
+    };
+    this.schedules.set(schedule.id, updated);
+    return updated;
+  }
+
+  async getSchedule(userId: string, id: string): Promise<ScheduledRoutine | null> {
+    const schedule = this.schedules.get(id);
+    if (!schedule || schedule.userId !== userId) return null;
+    return schedule;
+  }
+
+  async listSchedules(userId: string, status?: ScheduleStatus | 'all'): Promise<ScheduledRoutine[]> {
+    return Array.from(this.schedules.values())
+      .filter((s) => {
+        if (s.userId !== userId) return false;
+        if (status && status !== 'all' && s.status !== status) return false;
+        return true;
+      })
+      .sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime());
+  }
+
+  async getDueSchedules(nowUtcIso: string): Promise<ScheduledRoutine[]> {
+    const nowTime = new Date(nowUtcIso).getTime();
+    return Array.from(this.schedules.values()).filter((s) => {
+      if (s.status !== 'active') return false;
+      const nextTime = new Date(s.nextRunAt).getTime();
+      return nextTime <= nowTime;
+    });
+  }
+
+  async deleteSchedule(userId: string, id: string): Promise<boolean> {
+    const schedule = this.schedules.get(id);
+    if (!schedule || schedule.userId !== userId) return false;
+    return this.schedules.delete(id);
+  }
+
 
   async clearTaskHistory(userId: string): Promise<void> {
     for (const [id, task] of this.tasks.entries()) {

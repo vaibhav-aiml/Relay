@@ -40,6 +40,33 @@ export interface TaskMessage {
   timestamp: string;
 }
 
+export type ScheduleType = 'once' | 'recurring';
+export type ScheduleStatus = 'active' | 'paused' | 'completed' | 'cancelled';
+export type RoutineNotificationType = 'silent' | 'push' | 'push_and_run';
+
+export interface ScheduledRoutine {
+  id: string;
+  userId: string;
+  name: string;
+  goal: string;
+  scheduleType: ScheduleType;
+  cronExpression?: string;             // in user local timezone (e.g. "30 8 * * 1-5")
+  humanSchedule: string;               // e.g. "Every weekday at 8:30 AM"
+  scheduledAt?: string;                // UTC ISO for one-time future executions
+  nextRunAt: string;                   // UTC ISO for next trigger
+  lastRunAt?: string;                  // UTC ISO of previous execution
+  lastTaskId?: string;                 // ID of task spawned by last run
+  lastStatus?: 'success' | 'failed' | 'running';
+  consecutiveFailures?: number;
+  status: ScheduleStatus;
+  totalRuns: number;
+  preApprovedTools: string[];          // Whitelist of tools allowed to run autonomously
+  autoApprove: boolean;
+  notificationType: RoutineNotificationType;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Task {
   id: string;
   userId: string;
@@ -55,5 +82,9 @@ export interface Task {
   updatedAt: string;
   completedAt?: string;
   followUpHistory?: TaskMessage[];
+  source?: 'manual' | 'scheduled';
+  routineId?: string;
+  preApprovedTools?: string[];
+  autoApproveRoutine?: boolean;
 }
 

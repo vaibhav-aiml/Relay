@@ -160,7 +160,6 @@ export class ApiService {
     return this.request<{ memories: Memory[] }>('/api/memory');
   }
 
-
   public static async saveMemory(key: string, value: string, category?: string): Promise<{ memory: Memory }> {
     return this.request<{ memory: Memory }>('/api/memory', {
       method: 'POST',
@@ -179,4 +178,55 @@ export class ApiService {
       method: 'DELETE',
     });
   }
+
+  // Routines & Scheduled Tasks
+  public static async listSchedules(status?: string): Promise<{ schedules: import('@relay/shared-types').ScheduledRoutine[]; total?: number }> {
+    const endpoint = status && status !== 'all' ? `/api/schedules?status=${status}` : '/api/schedules';
+    return this.request<{ schedules: import('@relay/shared-types').ScheduledRoutine[]; total?: number }>(endpoint);
+  }
+
+  public static async getSchedule(id: string): Promise<{ schedule: import('@relay/shared-types').ScheduledRoutine }> {
+    return this.request<{ schedule: import('@relay/shared-types').ScheduledRoutine }>(`/api/schedules/${id}`);
+  }
+
+  public static async createSchedule(data: import('@relay/shared-types').CreateScheduleRequest): Promise<{ schedule: import('@relay/shared-types').ScheduledRoutine }> {
+    return this.request<{ schedule: import('@relay/shared-types').ScheduledRoutine }>('/api/schedules', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public static async updateSchedule(id: string, data: import('@relay/shared-types').UpdateScheduleRequest): Promise<{ schedule: import('@relay/shared-types').ScheduledRoutine }> {
+    return this.request<{ schedule: import('@relay/shared-types').ScheduledRoutine }>(`/api/schedules/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  public static async toggleSchedule(id: string): Promise<{ schedule: import('@relay/shared-types').ScheduledRoutine; message?: string }> {
+    return this.request<{ schedule: import('@relay/shared-types').ScheduledRoutine; message?: string }>(`/api/schedules/${id}/toggle`, {
+      method: 'POST',
+    });
+  }
+
+  public static async runScheduleNow(id: string): Promise<{ success: boolean; message?: string; task?: Task; schedule?: import('@relay/shared-types').ScheduledRoutine }> {
+    return this.request<{ success: boolean; message?: string; task?: Task; schedule?: import('@relay/shared-types').ScheduledRoutine }>(`/api/schedules/${id}/run`, {
+      method: 'POST',
+    });
+  }
+
+  public static async deleteSchedule(id: string): Promise<{ success: boolean; message?: string }> {
+    return this.request<{ success: boolean; message?: string }>(`/api/schedules/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // Push Notifications & Device Profile
+  public static async registerPushToken(pushToken: string, timezone?: string): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>('/api/schedules/push-token', {
+      method: 'POST',
+      body: JSON.stringify({ pushToken, timezone }),
+    });
+  }
 }
+

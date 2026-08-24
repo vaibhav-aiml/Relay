@@ -10,10 +10,12 @@ import {
   Switch,
   Alert,
 } from 'react-native';
+import { Brain, Cpu, Volume2, Plus, Trash2, ShieldAlert, Users, RefreshCw, Globe, ExternalLink, ShieldCheck, Clock } from 'lucide-react-native';
+import { Linking, ActivityIndicator } from 'react-native';
 import { Header } from '../components/Header';
-import { Brain, Cpu, Volume2, Plus, Trash2, ShieldAlert, Users, RefreshCw } from 'lucide-react-native';
 import { useAppStore } from '../store/useAppStore';
 import { ApiService } from '../services/api';
+
 
 export default function SettingsScreen() {
   const {
@@ -26,16 +28,42 @@ export default function SettingsScreen() {
     syncDeviceContacts,
     clearSyncedContacts,
     isSyncingContacts,
+    connections,
+    fetchConnections,
   } = useAppStore();
 
   const [newKey, setNewKey] = useState('');
   const [newValue, setNewValue] = useState('');
   const [voiceTTS, setVoiceTTS] = useState(true);
+  const [connectingGoogle, setConnectingGoogle] = useState(false);
+  const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
 
   useEffect(() => {
     fetchMemories();
     fetchSyncedContacts();
+    fetchConnections();
   }, []);
+
+  const googleConn = connections.find((c) => c.provider === 'google' && c.status === 'active');
+
+  const handleConnectGoogle = async () => {
+    setConnectingGoogle(true);
+    try {
+      const { authUrl } = await ApiService.getGoogleAuthUrl();
+      if (authUrl) {
+        await Linking.openURL(authUrl);
+      }
+    } catch (err) {
+      console.warn('Failed to get Google OAuth URL:', err);
+    } finally {
+      setConnectingGoogle(false);
+    }
+  };
+
+  const handleRevokeGoogle = async (id: string) => {
+    await ApiService.revokeConnection(id);
+    fetchConnections();
+  };
 
   const handleAddPreference = async () => {
     if (!newKey.trim() || !newValue.trim()) return;
@@ -90,13 +118,65 @@ export default function SettingsScreen() {
     );
   };
 
-
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="Settings" subtitle="Preferences & Agent Memory" />
+      <Header title="Settings" subtitle="Preferences & Workspace Integrations" />
 
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-        {/* Model & Voice Configuration */}
+        {/* Google Workspace & Integrations Section */}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <Globe size={18} color="#6366f1" />
+            <Text style={styles.sectionTitle}>Workspace Integrations</Text>
+          </View>
+          <Text style={styles.sectionDesc}>
+            Connect your Google account to empower Relay to autonomously read emails, check calendars, and resolve contacts.
+          </Text>
+
+          <View style={styles.googleBox}>
+            <View style={styles.googleHeader}>
+              <View style={styles.googleLeft}>
+                <View style={styles.googleIconBox}>
+                  <Globe size={20} color="#6366f1" />
+                </View>
+                <View>
+                  <Text style={styles.providerName}>Google Workspace</Text>
+                  <Text style={styles.providerScopes}>Gmail • Calendar • Contacts</Text>
+                </View>
+              </View>
+
+              <View style={[styles.statusPill, googleConn ? styles.statusActive : styles.statusInactive]}>
+                <Text style={[styles.statusPillText, googleConn ? styles.statusActiveText : styles.statusInactiveText]}>
+                  {googleConn ? 'CONNECTED' : 'DISCONNECTED'}
+                </Text>
+              </View>
+            </View>
+
+            {googleConn ? (
+              <TouchableOpacity style={styles.revokeBtn} onPress={() => handleRevokeGoogle(googleConn.id)}>
+                <Trash2 size={14} color="#ef4444" />
+                <Text style={styles.revokeBtnText}>Revoke Google Access</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.connectBtn}
+                onPress={handleConnectGoogle}
+                disabled={connectingGoogle}
+              >
+                {connectingGoogle ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <ExternalLink size={14} color="#ffffff" />
+                    <Text style={styles.connectBtnText}>Connect Google Account</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Model & Timezone Configuration */}
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeader}>
             <Cpu size={18} color="#6366f1" />
@@ -116,12 +196,15 @@ export default function SettingsScreen() {
           <View style={styles.divider} />
 
           <View style={styles.settingRow}>
-            <View>
-              <Text style={styles.settingLabel}>Fallback AI Provider</Text>
-              <Text style={styles.settingSub}>Anthropic Claude 3.5 Sonnet</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Clock size={16} color="#38bdf8" />
+              <View>
+                <Text style={styles.settingLabel}>Routine Timezone</Text>
+                <Text style={styles.settingSub}>{detectedTimezone}</Text>
+              </View>
             </View>
-            <View style={[styles.pillBadge, { backgroundColor: 'rgba(100, 116, 139, 0.2)' }]}>
-              <Text style={[styles.pillText, { color: '#94a3b8' }]}>STANDBY</Text>
+            <View style={[styles.pillBadge, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
+              <Text style={[styles.pillText, { color: '#38bdf8' }]}>DETECTED</Text>
             </View>
           </View>
 
@@ -151,7 +234,7 @@ export default function SettingsScreen() {
             <Text style={styles.sectionTitle}>Learned Preferences & Memories</Text>
           </View>
           <Text style={styles.sectionDesc}>
-            Relay remembers your scheduling habits and contacts to customize plan creation.
+            Relay remembers your scheduling habits, food preferences, and contacts to customize execution.
           </Text>
 
           {/* Existing Memories */}
@@ -171,14 +254,14 @@ export default function SettingsScreen() {
           <View style={styles.addMemoryBox}>
             <TextInput
               style={styles.inputField}
-              placeholder="Key (e.g. meeting_hours)"
+              placeholder="Key (e.g. usual_coffee)"
               placeholderTextColor="#64748b"
               value={newKey}
               onChangeText={setNewKey}
             />
             <TextInput
               style={styles.inputField}
-              placeholder="Preference (e.g. Schedule meetings 9-11 AM)"
+              placeholder="Preference (e.g. Cold Coffee with extra ice from Starbucks)"
               placeholderTextColor="#64748b"
               value={newValue}
               onChangeText={setNewValue}
@@ -205,7 +288,7 @@ export default function SettingsScreen() {
               <Text style={styles.settingLabel}>Synced Contacts</Text>
               <Text style={styles.settingSub}>
                 {syncedContacts.length > 0
-                  ? `${syncedContacts.length} contacts available for calling`
+                  ? `${syncedContacts.length} contacts available for calling & WhatsApp`
                   : 'No contacts synced yet'}
               </Text>
             </View>
@@ -248,13 +331,13 @@ export default function SettingsScreen() {
             <Text style={styles.purgeBtnText}>Purge All Stored Data</Text>
           </TouchableOpacity>
         </View>
-
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+
   safeArea: {
     flex: 1,
     backgroundColor: '#090a0f',
@@ -425,5 +508,95 @@ const styles = StyleSheet.create({
   btnDisabled: {
     opacity: 0.5,
   },
+  googleBox: {
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    borderRadius: 12,
+    padding: 14,
+  },
+  googleHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  googleLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  googleIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  providerName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  providerScopes: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 2,
+  },
+  statusPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  statusActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+  },
+  statusActiveText: {
+    color: '#10b981',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  statusInactive: {
+    backgroundColor: 'rgba(100, 116, 139, 0.15)',
+  },
+  statusInactiveText: {
+    color: '#94a3b8',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  statusPillText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  connectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#6366f1',
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  connectBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  revokeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  revokeBtnText: {
+    color: '#ef4444',
+    fontSize: 13,
+    fontWeight: '600',
+  },
 });
+
 

@@ -1,15 +1,23 @@
-import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact, TaskFilterOptions } from '@relay/shared-types';
+import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact, TaskFilterOptions, ScheduledRoutine, ScheduleStatus } from '@relay/shared-types';
 
 export interface IDatabaseRepository {
   // Users
   getUser(userId: string): Promise<User | null>;
   saveUser(user: User): Promise<User>;
+  updateUserPushToken?(userId: string, pushToken: string): Promise<void>;
 
   // Tasks
   getTask(userId: string, taskId: string): Promise<Task | null>;
   saveTask(task: Task): Promise<Task>;
   listTasks(userId: string, options?: number | TaskFilterOptions): Promise<Task[]>;
   clearTaskHistory?(userId: string): Promise<void>;
+
+  // Schedules & Routines
+  saveSchedule(schedule: ScheduledRoutine): Promise<ScheduledRoutine>;
+  getSchedule(userId: string, id: string): Promise<ScheduledRoutine | null>;
+  listSchedules(userId: string, status?: ScheduleStatus | 'all'): Promise<ScheduledRoutine[]>;
+  getDueSchedules(nowUtcIso: string): Promise<ScheduledRoutine[]>;
+  deleteSchedule(userId: string, id: string): Promise<boolean>;
 
   // Task Events
   logEvent(event: Omit<TaskEvent, 'id' | 'timestamp'>): Promise<TaskEvent>;
@@ -37,4 +45,5 @@ export interface IDatabaseRepository {
   getConnection(userId: string, provider: 'google'): Promise<Connection | null>;
   deleteConnection(userId: string, connectionId: string): Promise<boolean>;
 }
+
 

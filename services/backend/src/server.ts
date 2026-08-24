@@ -12,6 +12,8 @@ import { voiceRoutes } from './api/voice.js';
 import { connectionRoutes } from './api/connections.js';
 import { memoryRoutes } from './api/memory.js';
 import { contactsRoutes } from './api/contacts.js';
+import { scheduleRoutes } from './api/schedules.js';
+import { SchedulerDaemon } from './scheduler/daemon.js';
 
 dotenv.config();
 
@@ -70,7 +72,18 @@ export function createServer(): FastifyInstance {
   app.register(connectionRoutes, { prefix: '/api/connections' });
   app.register(memoryRoutes, { prefix: '/api/memory' });
   app.register(contactsRoutes, { prefix: '/api/contacts' });
+  app.register(scheduleRoutes, { prefix: '/api/schedules' });
+
+  // Background Scheduler Daemon Lifecycle
+  app.addHook('onReady', async () => {
+    SchedulerDaemon.getInstance(getDatabase()).start();
+  });
+
+  app.addHook('onClose', async () => {
+    SchedulerDaemon.getInstance(getDatabase()).stop();
+  });
 
   return app;
 }
+
 

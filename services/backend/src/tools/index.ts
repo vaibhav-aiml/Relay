@@ -17,7 +17,7 @@ import { telephonyMakeCallTool } from './telephony/index.js';
 import { messagingSendWhatsAppTool, messagingSendSmsTool } from './messaging/index.js';
 import { foodSearchOptionsTool, foodPrepareOrderTool } from './food/index.js';
 import { webSearchTool, webOpenTool } from './web/index.js';
-import { tasksCreateTool, tasksGetStatusTool, tasksCancelTool } from './tasks/index.js';
+import { tasksCreateTool, tasksGetStatusTool, tasksCancelTool, tasksScheduleTool, tasksListScheduledTool, tasksCancelScheduledTool } from './tasks/index.js';
 import { memorySaveTool, memoryGetTool } from './memory/index.js';
 
 export function initializeTools(): ToolRegistry {
@@ -52,10 +52,13 @@ export function initializeTools(): ToolRegistry {
   registry.register(webSearchTool);
   registry.register(webOpenTool);
 
-  // Tasks
+  // Tasks & Schedules
   registry.register(tasksCreateTool);
   registry.register(tasksGetStatusTool);
   registry.register(tasksCancelTool);
+  registry.register(tasksScheduleTool);
+  registry.register(tasksListScheduledTool);
+  registry.register(tasksCancelScheduledTool);
 
   // Memory
   registry.register(memorySaveTool);
@@ -63,6 +66,7 @@ export function initializeTools(): ToolRegistry {
 
   return registry;
 }
+
 
 export * from './types.js';
 export * from './registry.js';

@@ -11,7 +11,8 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowUpRight, Sparkles, Send } from 'lucide-react-native';
+import { ArrowUpRight, Sparkles, Send, Clock } from 'lucide-react-native';
+
 import { Header } from '../components/Header';
 import { VoiceButton } from '../components/VoiceButton';
 import { TaskStatusLive } from '../components/TaskStatusLive';
@@ -146,6 +147,20 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Routines Quick Widget */}
+        <TouchableOpacity style={styles.routineWidget} onPress={() => router.push('/schedules')}>
+          <View style={styles.routineWidgetLeft}>
+            <View style={styles.routineIconBox}>
+              <Clock size={18} color="#6366f1" />
+            </View>
+            <View>
+              <Text style={styles.routineWidgetTitle}>Autonomous Routines & Schedules</Text>
+              <Text style={styles.routineWidgetSub}>Morning briefings, reminders & recurring workflows</Text>
+            </View>
+          </View>
+          <ArrowUpRight size={16} color="#6366f1" />
+        </TouchableOpacity>
+
         {/* Quick Suggested Prompts */}
         <View style={styles.quickSection}>
           <Text style={styles.quickLabel}>Suggested Goals</Text>
@@ -164,6 +179,7 @@ export default function HomeScreen() {
             ))}
           </View>
         </View>
+
 
         {/* Recent Tasks */}
         {tasks.length > 0 && (
@@ -315,4 +331,40 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  routineWidget: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(99, 102, 241, 0.08)',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.25)',
+    marginBottom: 20,
+  },
+  routineWidgetLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  routineIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  routineWidgetTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#ffffff',
+  },
+  routineWidgetSub: {
+    fontSize: 11,
+    color: '#94a3b8',
+    marginTop: 2,
+  },
 });
+

@@ -126,7 +126,7 @@ relay/
 | **Contextual Memory** | Remembers user preferences (favorite coffee, usual orders) across sessions for personalized execution |
 | **Follow-up Conversations** | Maintains multi-turn conversation history within a task for clarifications |
 
-### 🔧 21 Built-in Tools
+### 🔧 24 Built-in Tools
 
 | Category | Tools | Capabilities |
 |---|---|---|
@@ -136,14 +136,24 @@ relay/
 | **👤 Contacts** | `contacts.search` | Search synced device contacts and Google contacts |
 | **🍕 Food** | `food.searchOptions`, `food.prepareOrder` | Multi-platform search (Zomato, Swiggy, Blinkit, Zepto) with preference memory |
 | **🌐 Web** | `web.search`, `web.open` | Web search via Tavily/SerpAPI and page content extraction |
-| **📝 Tasks** | `tasks.create`, `tasks.getStatus`, `tasks.cancel` | Sub-task creation and lifecycle management |
+| **📝 Tasks & Routines** | `tasks.create`, `tasks.getStatus`, `tasks.cancel`, `tasks.schedule`, `tasks.listScheduled`, `tasks.cancelScheduled` | Sub-tasks and proactive scheduled routines with cron cadences |
 | **🧠 Memory** | `memory.save`, `memory.get` | Persistent user preference storage and retrieval |
+
+### 🔄 Proactive Scheduled & Recurring Routines Engine
+
+| Component | Functionality |
+|---|---|
+| **Scheduler Daemon** | Persistent background service scanning due routines against current UTC timestamps with in-flight concurrency locks |
+| **Timezone-Aware Cron** | Evaluates natural language cadences (*"every weekday at 8:30 AM"*) and 5-part cron expressions relative to user device timezone |
+| **Pre-Approved Whitelist** | Prevents approval deadlocks during autonomous runs by bypassing confirmation prompts only for tools pre-approved by the user |
+| **Server Catch-Up Window** | 5-minute guard window that skips missed recurring runs after server downtime and safely advances to the next future occurrence |
+| **One-Tap Templates** | Quick-start templates for Morning Email Briefings, Dinner Food Reminders, Daily Agenda Prep, and Friday Weekly Recaps |
 
 ### 🔐 Security & Permissions
 
 | Layer | Mechanism |
 |---|---|
-| **Risk-Based Policy Engine** | Every tool is tagged with a risk level (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`). High-risk actions (sending emails, deleting events) require explicit user approval |
+| **Risk-Based Policy Engine** | Every tool is tagged with a risk level (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`). High-risk actions require explicit user approval or routine whitelist |
 | **Prompt Injection Defense** | External content (emails, web pages) is wrapped in `<untrusted_external_content>` tags and treated strictly as data, never as instructions |
 | **Schema Validation** | All tool arguments are validated with **Zod** schemas before execution |
 | **Argument Sanitization** | Dedicated `validateArgs` security module prevents injection via tool arguments |
@@ -154,10 +164,11 @@ relay/
 | Feature | Details |
 |---|---|
 | **Voice Input** | Speak your goal — transcribed via Groq Whisper and sent to the agent |
+| **Routines Dashboard** | Dedicated tab for managing schedules, 1-tap template setups, and immediate "▶️ Run Now" test triggers |
 | **Live Step Trace** | Real-time visualization of agent planning and execution steps |
 | **Approval Cards** | Rich UI cards for reviewing and approving/rejecting sensitive actions |
-| **Task History** | Searchable history of all past tasks with status and results |
-| **Google OAuth** | One-tap connection to Gmail, Calendar, and Contacts |
+| **Task History** | Searchable multi-dimensional history of all past tasks with status and results |
+| **Google OAuth** | One-tap connection to Gmail, Calendar, and Contacts directly inside Settings |
 | **Dark Mode** | Sleek dark UI optimized for AMOLED displays |
 
 ---
@@ -168,10 +179,10 @@ relay/
 |---|---|
 | **Language** | TypeScript 5.7 (strict mode, ES2022) |
 | **Mobile** | React Native 0.81 · Expo 54 · Expo Router · Zustand |
-| **Backend** | Fastify 5 · Pino logger · Node.js |
+| **Backend** | Fastify 5 · Pino logger · Node.js · cron-parser |
 | **AI Providers** | Groq SDK (Llama 3.3 70B) · Google Generative AI (Gemini) · Anthropic SDK (Claude) |
 | **Database** | Firebase Admin / Firestore (production) · In-Memory DB (development) |
-| **Auth & APIs** | Google OAuth2 · googleapis · Firebase Auth |
+| **Auth & APIs** | Google OAuth2 · googleapis · Firebase Auth · Expo Push API |
 | **Validation** | Zod schema validation |
 | **Testing** | Jest · ts-jest (unit, integration, E2E) |
 | **Monorepo** | npm workspaces with TypeScript project references |
@@ -233,11 +244,12 @@ WEB_SEARCH_API_KEY=...                  # Tavily or SerpAPI
 npm run build
 ```
 
-### 4. Start the Backend
+### 4. Start the Backend & Scheduler Daemon
 
 ```bash
 npm run dev:backend
 # → Server running on http://localhost:4000
+# → Scheduler daemon running background evaluations
 # → Health check: GET http://localhost:4000/health
 ```
 
@@ -246,7 +258,7 @@ npm run dev:backend
 ```bash
 npm run dev:mobile
 # → Opens Expo DevTools
-# → Scan QR with Expo Go or press 'a' for Android / 'i' for iOS
+# → Scan QR with Expo Go or press 'w' for Web / 'a' for Android / 'i' for iOS
 ```
 
 ---
@@ -261,6 +273,14 @@ All endpoints are prefixed with `/api`.
 | `POST` | `/api/tasks` | Create and execute a new agent task |
 | `GET` | `/api/tasks/:id` | Get task status and execution trace |
 | `POST` | `/api/approvals/:taskId` | Submit approval/rejection for a pending action |
+| `GET` | `/api/schedules` | List user scheduled routines with status filters |
+| `POST` | `/api/schedules` | Create a new scheduled or recurring routine |
+| `GET` | `/api/schedules/:id` | Get details for a specific scheduled routine |
+| `PUT` | `/api/schedules/:id` | Update schedule goal, cadence, or pre-approved permissions |
+| `POST` | `/api/schedules/:id/toggle` | Toggle routine status between active and paused |
+| `POST` | `/api/schedules/:id/run` | Manually trigger an immediate execution of a routine |
+| `DELETE` | `/api/schedules/:id` | Delete/cancel a scheduled routine |
+| `POST` | `/api/schedules/push-token` | Register device Expo push token and timezone |
 | `POST` | `/api/voice/transcribe` | Transcribe audio to text (multipart upload, 25MB max) |
 | `GET` | `/api/connections/google/auth-url` | Get Google OAuth2 authorization URL |
 | `GET` | `/api/connections/google/callback` | OAuth2 callback handler |
@@ -279,13 +299,13 @@ The project includes comprehensive test suites at three levels:
 # Run all tests
 npm test
 
-# Unit tests only
+# Unit tests only (Scheduler, Cron, Tools, Policies, Security)
 npm run test:unit
 
-# Integration tests
+# Integration tests (REST API lifecycle, Orchestrator)
 npm run test:integration
 
-# End-to-end tests
+# End-to-end scenario tests
 npm run test:e2e
 ```
 
@@ -295,13 +315,13 @@ npm run test:e2e
 
 ```mermaid
 stateDiagram-v2
-    [*] --> CREATED : User submits goal
+    [*] --> CREATED : User submits goal or Daemon triggers routine
     CREATED --> PLANNING : Agent starts
     PLANNING --> EXECUTING : LLM generates tool call
     EXECUTING --> VERIFYING : Tool executed
     VERIFYING --> EXECUTING : More steps needed
     VERIFYING --> WAITING_APPROVAL : High-risk action detected
-    WAITING_APPROVAL --> EXECUTING : User approves
+    WAITING_APPROVAL --> EXECUTING : User approves (or Pre-Approved Routine)
     WAITING_APPROVAL --> CANCELLED : User rejects
     VERIFYING --> COMPLETED : Goal achieved
     EXECUTING --> FAILED : Max iterations / timeout
@@ -315,13 +335,18 @@ stateDiagram-v2
 
 ## 🗺️ Roadmap
 
-- [ ] 🔔 Push notifications for approval requests
+- [x] 🔄 Recurring scheduled tasks & autonomous routines engine
+- [x] 🔐 Pre-approved tool whitelisting for autonomous executions
+- [x] 🍕 AI food ordering with multi-platform comparison & preference memory
+- [x] 💬 WhatsApp, SMS, and native telephony calling integration
+- [x] 📅 Google Workspace Gmail & Calendar full lifecycle
+- [ ] 🔔 Push notifications for urgent approval requests
 - [ ] 🌍 Multi-language voice support
 - [ ] 🏠 Smart home integrations (IoT)
 - [ ] 📊 Task analytics dashboard
 - [ ] 🤖 Multi-agent collaboration
-- [ ] 🔄 Recurring scheduled tasks
 - [ ] 🧩 Plugin system for community tools
+
 
 ---
 

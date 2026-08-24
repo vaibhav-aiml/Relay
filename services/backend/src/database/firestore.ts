@@ -1,6 +1,6 @@
 import admin from 'firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
-import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact, TaskFilterOptions } from '@relay/shared-types';
+import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact, TaskFilterOptions, ScheduledRoutine, ScheduleStatus } from '@relay/shared-types';
 import { IDatabaseRepository } from './types.js';
 
 export class FirestoreRepository implements IDatabaseRepository {
@@ -41,6 +41,17 @@ export class FirestoreRepository implements IDatabaseRepository {
     return user;
   }
 
+  async updateUserPushToken(userId: string, pushToken: string): Promise<void> {
+    await this.db.collection('users').doc(userId).set(
+      {
+        profile: {
+          pushToken,
+        },
+      },
+      { merge: true }
+    );
+  }
+
   // Tasks
   async getTask(userId: string, taskId: string): Promise<Task | null> {
     const snap = await this.db.collection('users').doc(userId).collection('tasks').doc(taskId).get();
@@ -64,6 +75,7 @@ export class FirestoreRepository implements IDatabaseRepository {
     const query = opts.query?.toLowerCase().trim() || '';
     const status = opts.status && opts.status !== 'ALL' ? opts.status : undefined;
     const tool = opts.tool && opts.tool !== 'ALL' ? opts.tool.toLowerCase() : undefined;
+    const source = opts.source && opts.source !== 'all' ? opts.source : undefined;
 
     const baseQuery = this.db
       .collection('users')
@@ -78,6 +90,11 @@ export class FirestoreRepository implements IDatabaseRepository {
     // Status filter
     if (status) {
       tasks = tasks.filter((t) => t.status === status);
+    }
+
+    // Source filter
+    if (source) {
+      tasks = tasks.filter((t) => (t.source || 'manual') === source);
     }
 
     // Time horizon filter
@@ -127,6 +144,59 @@ export class FirestoreRepository implements IDatabaseRepository {
 
     return tasks.slice(0, limit);
   }
+
+  // Schedules & Routines
+  async saveSchedule(schedule: ScheduledRoutine): Promise<ScheduledRoutine> {
+    const updated = {
+      ...schedule,
+      updatedAt: new Date().toISOString(),
+    };
+    const { id, ...data } = updated;
+    await this.db.collection('users').doc(schedule.userId).collection('schedules').doc(id).set(data, { merge: true });
+    // Also mirror to global schedules collection for fast cross-user daemon scanning
+    await this.db.collection('schedules').doc(id).set(updated, { merge: true });
+    return updated;
+  }
+
+  async getSchedule(userId: string, id: string): Promise<ScheduledRoutine | null> {
+    const snap = await this.db.collection('users').doc(userId).collection('schedules').doc(id).get();
+    if (!snap.exists) return null;
+    return { id: snap.id, ...(snap.data() as Omit<ScheduledRoutine, 'id'>) };
+  }
+
+  async listSchedules(userId: string, status?: ScheduleStatus | 'all'): Promise<ScheduledRoutine[]> {
+    let query: admin.firestore.Query = this.db.collection('users').doc(userId).collection('schedules');
+    if (status && status !== 'all') {
+      query = query.where('status', '==', status);
+    }
+    const snap = await query.get();
+    const routines: ScheduledRoutine[] = snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<ScheduledRoutine, 'id'>) }));
+    return routines.sort((a, b) => new Date(a.nextRunAt).getTime() - new Date(b.nextRunAt).getTime());
+  }
+
+  async getDueSchedules(nowUtcIso: string): Promise<ScheduledRoutine[]> {
+    try {
+      const snap = await this.db
+        .collection('schedules')
+        .where('status', '==', 'active')
+        .where('nextRunAt', '<=', nowUtcIso)
+        .get();
+      return snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<ScheduledRoutine, 'id'>) }));
+    } catch (indexErr) {
+      // Resilient fallback: Query active schedules and filter in-memory if composite index is pending deployment
+      const snap = await this.db.collection('schedules').where('status', '==', 'active').get();
+      const routines = snap.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<ScheduledRoutine, 'id'>) }));
+      return routines.filter((r) => r.nextRunAt && r.nextRunAt <= nowUtcIso);
+    }
+  }
+
+
+  async deleteSchedule(userId: string, id: string): Promise<boolean> {
+    await this.db.collection('users').doc(userId).collection('schedules').doc(id).delete();
+    await this.db.collection('schedules').doc(id).delete();
+    return true;
+  }
+
 
   async clearTaskHistory(userId: string): Promise<void> {
     const snap = await this.db.collection('users').doc(userId).collection('tasks').get();
