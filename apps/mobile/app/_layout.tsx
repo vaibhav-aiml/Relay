@@ -1,12 +1,18 @@
 import '../polyfills';
 import React, { useEffect, useRef } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, LogBox } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Home, History, Clock, Settings } from 'lucide-react-native';
 import * as Notifications from 'expo-notifications';
 import { MobileNotificationService } from '../services/notifications';
 import { useAppStore } from '../store/useAppStore';
+
+// Suppress known Expo Go development notice regarding remote push notifications in SDK 53+
+LogBox.ignoreLogs([
+  'expo-notifications: Android Push notifications',
+  'Android Push notifications (remote notifications) functionality provided by expo-notifications was removed',
+]);
 
 export default function RootLayout() {
   const router = useRouter();

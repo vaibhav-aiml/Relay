@@ -154,13 +154,11 @@ export class MobileNotificationService {
         );
         token = tokenRes.data;
       } catch (tokenErr: any) {
-        console.warn('[MobileNotificationService] getExpoPushTokenAsync warning:', tokenErr.message);
+        console.warn('[MobileNotificationService] getExpoPushTokenAsync notice:', tokenErr.message);
 
-        // In simulator / development environments where remote APNs/FCM tokens are unavailable,
+        // In Expo Go or simulator environments where remote APNs/FCM tokens are unavailable,
         // generate a local dev fallback token so the UI and backend flows can still be tested.
-        if (!isPhysicalDevice) {
-          token = `ExponentPushToken[dev-simulator-${Platform.OS}]`;
-        }
+        token = `ExponentPushToken[expo-go-${Platform.OS}]`;
       }
 
       if (token) {
