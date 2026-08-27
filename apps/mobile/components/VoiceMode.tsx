@@ -50,6 +50,7 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
   const scrollRef = useRef<ScrollView>(null);
   const pollCleanupRef = useRef<(() => void) | null>(null);
   const autoRelistenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const streamingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Handle hardware back button
   useEffect(() => {
@@ -94,10 +95,10 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
     }
   }, [currentTask?.status, voiceState]);
 
-  // Scroll to bottom on new transcript entry
+  // Scroll to bottom on transcript updates
   useEffect(() => {
     scrollRef.current?.scrollToEnd({ animated: true });
-  }, [transcript.length]);
+  }, [transcript]);
 
   const beginListening = useCallback(async () => {
     if (isMuted) {
@@ -106,13 +107,13 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
     }
 
     setVoiceState('LISTENING');
-    setCurrentText('Listening...');
+    setCurrentText('Listening to your voice...');
     await startRecording();
   }, [isMuted, startRecording]);
 
   const handleStopAndProcess = useCallback(async () => {
     setVoiceState('PROCESSING');
-    setCurrentText('Processing...');
+    setCurrentText('Transcribing your voice...');
 
     const transcribedText = await stopAndTranscribe();
 
@@ -127,7 +128,7 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
       ...prev,
       { role: 'user', text: transcribedText, timestamp: new Date() },
     ]);
-    setCurrentText('Relay is thinking...');
+    setCurrentText('Relay is reasoning...');
 
     try {
       // Create task and start polling
@@ -142,22 +143,80 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
 
   const handleRelayResponse = useCallback(
     async (text: string) => {
-      // Add Relay's response to transcript
-      setTranscript((prev) => [
-        ...prev,
-        { role: 'relay', text, timestamp: new Date() },
-      ]);
-      setCurrentText(text);
-      setVoiceState('SPEAKING');
-
-      // Speak the response
-      try {
-        await TTSService.speakConcise(text);
-      } catch (err) {
-        console.warn('[VoiceMode] TTS speak error:', err);
+      // Clear any prior streaming intervals
+      if (streamingTimerRef.current) {
+        clearInterval(streamingTimerRef.current);
+        streamingTimerRef.current = null;
       }
 
-      // After TTS finishes, auto-re-listen with a short delay
+      const formattedSpoken = TTSService.formatForSpeech(text);
+      const words = formattedSpoken.split(/\s+/).filter(Boolean);
+
+      setVoiceState('SPEAKING');
+
+      // Initialize empty relay transcript bubble for real-time word streaming
+      const initialWord = words[0] || '';
+      setTranscript((prev) => [
+        ...prev,
+        { role: 'relay', text: initialWord, timestamp: new Date() },
+      ]);
+      setCurrentText(initialWord);
+
+      // Start real-time word-by-word streaming typewriter animation synced to speech rate
+      let wordIndex = 0;
+      const rate = TTSService.getSettings().rate || 1.0;
+      const wordIntervalMs = Math.max(120, Math.floor(320 / rate));
+
+      if (words.length > 1) {
+        streamingTimerRef.current = setInterval(() => {
+          wordIndex++;
+          if (wordIndex < words.length) {
+            const currentStreamed = words.slice(0, wordIndex + 1).join(' ');
+            setCurrentText(currentStreamed);
+            setTranscript((prev) => {
+              const updated = [...prev];
+              if (updated.length > 0 && updated[updated.length - 1].role === 'relay') {
+                updated[updated.length - 1] = {
+                  ...updated[updated.length - 1],
+                  text: currentStreamed,
+                };
+              }
+              return updated;
+            });
+          } else {
+            if (streamingTimerRef.current) {
+              clearInterval(streamingTimerRef.current);
+              streamingTimerRef.current = null;
+            }
+          }
+        }, wordIntervalMs);
+      }
+
+      // Speak response aloud via TTS
+      try {
+        await TTSService.speak(formattedSpoken);
+      } catch (err) {
+        console.warn('[VoiceMode] TTS speak error:', err);
+      } finally {
+        if (streamingTimerRef.current) {
+          clearInterval(streamingTimerRef.current);
+          streamingTimerRef.current = null;
+        }
+        // Ensure full text is displayed upon completion
+        setCurrentText(formattedSpoken);
+        setTranscript((prev) => {
+          const updated = [...prev];
+          if (updated.length > 0 && updated[updated.length - 1].role === 'relay') {
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              text: formattedSpoken,
+            };
+          }
+          return updated;
+        });
+      }
+
+      // After TTS finishes speaking, auto-re-listen with a short 500ms pause
       setVoiceState('IDLE');
       if (!isMuted) {
         autoRelistenTimerRef.current = setTimeout(() => {
@@ -169,7 +228,11 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
   );
 
   const handleClose = useCallback(() => {
-    // Clean up everything
+    // Clean up all resources and timers
+    if (streamingTimerRef.current) {
+      clearInterval(streamingTimerRef.current);
+      streamingTimerRef.current = null;
+    }
     TTSService.stop();
     cancelRecording();
     if (pollCleanupRef.current) {

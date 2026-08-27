@@ -100,7 +100,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   pollTaskUntilDone: (taskId: string) => {
     set({ isPolling: true });
-    const interval = setInterval(async () => {
+
+    const pollTick = async () => {
       try {
         const { task, events } = await ApiService.getTask(taskId);
         set({ currentTask: task, taskEvents: events });
@@ -146,7 +147,11 @@ export const useAppStore = create<AppState>((set, get) => ({
         clearInterval(interval);
         set({ isPolling: false });
       }
-    }, 1200);
+    };
+
+    // Immediate initial check (saves up to 1-2s for fast LLM answers)
+    pollTick();
+    const interval = setInterval(pollTick, 450);
 
     return () => {
       clearInterval(interval);
