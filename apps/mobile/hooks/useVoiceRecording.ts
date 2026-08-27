@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback } from 'react';
 import { Alert, Platform } from 'react-native';
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { ApiService } from '../services/api';
 import { TTSService } from '../services/tts';
 
@@ -120,9 +120,20 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
           reader.readAsDataURL(blob);
         });
       } else {
-        audioBase64 = await FileSystem.readAsStringAsync(uri, {
-          encoding: 'base64',
-        });
+        try {
+          audioBase64 = await FileSystem.readAsStringAsync(uri, {
+            encoding: FileSystem.EncodingType?.Base64 || 'base64',
+          });
+        } catch (fsErr) {
+          // Fallback via File class if legacy throws on newer Expo SDK
+          try {
+            const { File } = await import('expo-file-system');
+            const file = new File(uri);
+            audioBase64 = await file.base64();
+          } catch (fileClassErr) {
+            throw new Error(`Failed to read audio file: ${(fsErr as any)?.message || fsErr}`);
+          }
+        }
       }
 
       if (!audioBase64 || audioBase64.length < 100) {
