@@ -1,11 +1,53 @@
 import '../polyfills';
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet } from 'react-native';
-import { Slot, Tabs } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Home, History, Clock, Settings } from 'lucide-react-native';
+import * as Notifications from 'expo-notifications';
+import { MobileNotificationService } from '../services/notifications';
+import { useAppStore } from '../store/useAppStore';
 
 export default function RootLayout() {
+  const router = useRouter();
+  const lastNotificationResponse = Notifications.useLastNotificationResponse();
+  const { submitApproval, checkPushPermission } = useAppStore();
+  const responseListener = useRef<any>(null);
+
+  // 1. Cold-start notification handling
+  useEffect(() => {
+    if (lastNotificationResponse) {
+      MobileNotificationService.handleNotificationResponse(
+        lastNotificationResponse,
+        router,
+        async (approvalId, decision) => {
+          await submitApproval(approvalId, decision);
+        }
+      );
+    }
+  }, [lastNotificationResponse]);
+
+  // 2. Setup channels, categories, and live notification response listener
+  useEffect(() => {
+    MobileNotificationService.setupChannelsAndCategories().catch(console.warn);
+    checkPushPermission().catch(console.warn);
+
+    responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
+      MobileNotificationService.handleNotificationResponse(
+        response,
+        router,
+        async (approvalId, decision) => {
+          await submitApproval(approvalId, decision);
+        }
+      );
+    });
+
+    return () => {
+      if (responseListener.current) {
+        responseListener.current.remove();
+      }
+    };
+  }, []);
   return (
     <View style={styles.container}>
       <StatusBar style="light" />

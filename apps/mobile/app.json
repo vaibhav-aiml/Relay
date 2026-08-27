@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -28,6 +28,11 @@
     "plugins": [
       "expo-router"
     ],
-    "scheme": "relay"
+    "scheme": "relay",
+    "extra": {
+      "eas": {
+        "projectId": "relay-pilot-project"
+      }
+    }
   }
 }

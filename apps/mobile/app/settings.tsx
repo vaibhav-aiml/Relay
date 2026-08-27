@@ -9,8 +9,9 @@ import {
   TextInput,
   Switch,
   Alert,
+  Platform,
 } from 'react-native';
-import { Brain, Cpu, Volume2, Plus, Trash2, ShieldAlert, Users, RefreshCw, Globe, ExternalLink, ShieldCheck, Clock } from 'lucide-react-native';
+import { Brain, Cpu, Volume2, Plus, Trash2, ShieldAlert, Users, RefreshCw, Globe, ExternalLink, ShieldCheck, Clock, Bell, BellRing, CheckCircle2, AlertCircle, Send, Check } from 'lucide-react-native';
 import { Linking, ActivityIndicator } from 'react-native';
 import { Header } from '../components/Header';
 import { useAppStore } from '../store/useAppStore';
@@ -30,18 +31,26 @@ export default function SettingsScreen() {
     isSyncingContacts,
     connections,
     fetchConnections,
+    pushToken,
+    pushPermissionStatus,
+    isRegisteringPush,
+    checkPushPermission,
+    requestPushPermissionAndRegister,
+    sendTestPushNotification,
   } = useAppStore();
 
   const [newKey, setNewKey] = useState('');
   const [newValue, setNewValue] = useState('');
   const [voiceTTS, setVoiceTTS] = useState(true);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
+  const [isSendingTestPush, setIsSendingTestPush] = useState(false);
   const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
 
   useEffect(() => {
     fetchMemories();
     fetchSyncedContacts();
     fetchConnections();
+    checkPushPermission();
   }, []);
 
   const googleConn = connections.find((c) => c.provider === 'google' && c.status === 'active');
@@ -70,6 +79,27 @@ export default function SettingsScreen() {
     await addMemory(newKey.trim(), newValue.trim(), 'preference');
     setNewKey('');
     setNewValue('');
+  };
+
+  const handleEnablePush = async () => {
+    const res = await requestPushPermissionAndRegister();
+    if (res.success) {
+      Alert.alert('Push Notifications Enabled', 'Relay will now send real-time action sign-offs and background routine alerts.');
+    } else {
+      Alert.alert('Permission Denied', res.error || 'Could not enable push notifications. Please check your system notification settings.');
+    }
+  };
+
+  const handleSendTestAlert = async () => {
+    setIsSendingTestPush(true);
+    try {
+      await sendTestPushNotification();
+      Alert.alert('Test Notification Sent', 'A test approval alert with [Approve] / [Reject] buttons has been delivered.');
+    } catch (err: any) {
+      Alert.alert('Test Failed', err.message || 'Failed to dispatch test notification.');
+    } finally {
+      setIsSendingTestPush(false);
+    }
   };
 
   const handleManualSyncContacts = async () => {
@@ -174,6 +204,86 @@ export default function SettingsScreen() {
               </TouchableOpacity>
             )}
           </View>
+        </View>
+
+        {/* Push Notifications & Background Alerts */}
+        <View style={styles.sectionCard}>
+          <View style={styles.sectionHeader}>
+            <BellRing size={18} color="#6366f1" />
+            <Text style={styles.sectionTitle}>Push Notifications & Action Alerts</Text>
+          </View>
+          <Text style={styles.sectionDesc}>
+            Receive real-time alerts when Relay requires your sign-off on sensitive actions or finishes background execution.
+          </Text>
+
+          <View style={styles.settingRow}>
+            <View>
+              <Text style={styles.settingLabel}>Notification Delivery</Text>
+              <Text style={styles.settingSub}>
+                {pushPermissionStatus === 'granted'
+                  ? 'Real-time approval buttons & routine alerts active'
+                  : 'Push permissions are currently disabled'}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.statusPill,
+                pushPermissionStatus === 'granted' ? styles.statusActive : styles.statusInactive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusPillText,
+                  pushPermissionStatus === 'granted' ? styles.statusActiveText : styles.statusInactiveText,
+                ]}
+              >
+                {pushPermissionStatus === 'granted' ? 'ENABLED' : 'DISABLED'}
+              </Text>
+            </View>
+          </View>
+
+          {pushPermissionStatus === 'granted' ? (
+            <View style={styles.pushActionsBox}>
+              <View style={styles.pushTokenRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.tokenLabel}>Push Channel & Token</Text>
+                  <Text style={styles.tokenValue} numberOfLines={1} ellipsizeMode="middle">
+                    {pushToken || 'ExponentPushToken[active]'}
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={styles.testPushBtn}
+                onPress={handleSendTestAlert}
+                disabled={isSendingTestPush}
+              >
+                {isSendingTestPush ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <Send size={14} color="#ffffff" />
+                    <Text style={styles.testPushBtnText}>Send Test Push Alert</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.connectBtn}
+              onPress={handleEnablePush}
+              disabled={isRegisteringPush}
+            >
+              {isRegisteringPush ? (
+                <ActivityIndicator size="small" color="#ffffff" />
+              ) : (
+                <>
+                  <Bell size={14} color="#ffffff" />
+                  <Text style={styles.connectBtnText}>Enable Push Alerts</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* Model & Timezone Configuration */}
@@ -596,6 +706,48 @@ const styles = StyleSheet.create({
     color: '#ef4444',
     fontSize: 13,
     fontWeight: '600',
+  },
+  pushActionsBox: {
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 8,
+    gap: 10,
+  },
+  pushTokenRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    borderRadius: 8,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  tokenLabel: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  tokenValue: {
+    fontSize: 12,
+    color: '#cbd5e1',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  testPushBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#4f46e5',
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  testPushBtnText: {
+    color: '#ffffff',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
 

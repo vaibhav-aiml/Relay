@@ -3,6 +3,7 @@ import { Linking, Alert } from 'react-native';
 import { Task, TaskEvent, Connection, Memory, UserContact, TaskFilterOptions } from '@relay/shared-types';
 import { ApiService } from '../services/api';
 import { DeviceContactsService } from '../services/contacts';
+import { MobileNotificationService } from '../services/notifications';
 
 interface AppState {
   currentTask: Task | null;
@@ -11,6 +12,9 @@ interface AppState {
   connections: Connection[];
   memories: Memory[];
   syncedContacts: UserContact[];
+  pushToken: string | null;
+  pushPermissionStatus: 'granted' | 'denied' | 'undetermined';
+  isRegisteringPush: boolean;
   isLoading: boolean;
   isPolling: boolean;
   isSyncingContacts: boolean;
@@ -32,6 +36,9 @@ interface AppState {
   fetchSyncedContacts: () => Promise<void>;
   syncDeviceContacts: (force?: boolean) => Promise<{ success: boolean; count: number; skipped?: boolean; error?: string }>;
   clearSyncedContacts: () => Promise<void>;
+  checkPushPermission: () => Promise<void>;
+  requestPushPermissionAndRegister: () => Promise<{ success: boolean; token?: string; error?: string }>;
+  sendTestPushNotification: () => Promise<void>;
   clearError: () => void;
 }
 
@@ -43,6 +50,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   connections: [],
   memories: [],
   syncedContacts: [],
+  pushToken: null,
+  pushPermissionStatus: 'undetermined',
+  isRegisteringPush: false,
   isLoading: false,
   isPolling: false,
   isSyncingContacts: false,
@@ -312,6 +322,47 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ syncedContacts: [], isSyncingContacts: false });
     } catch (err: any) {
       set({ isSyncingContacts: false, error: err.message });
+    }
+  },
+
+  checkPushPermission: async () => {
+    try {
+      const status = await MobileNotificationService.checkPermissionStatus();
+      set({ pushPermissionStatus: status as any });
+    } catch (err) {
+      console.warn('[useAppStore] checkPushPermission error:', err);
+    }
+  },
+
+  requestPushPermissionAndRegister: async () => {
+    set({ isRegisteringPush: true, error: null });
+    try {
+      const res = await MobileNotificationService.registerForPushNotifications();
+      if (res.success && res.token) {
+        set({
+          pushToken: res.token,
+          pushPermissionStatus: 'granted',
+          isRegisteringPush: false,
+        });
+      } else {
+        set({
+          pushPermissionStatus: (res.status as any) || 'denied',
+          isRegisteringPush: false,
+          error: res.error || null,
+        });
+      }
+      return res;
+    } catch (err: any) {
+      set({ isRegisteringPush: false, error: err.message });
+      return { success: false, error: err.message };
+    }
+  },
+
+  sendTestPushNotification: async () => {
+    try {
+      await MobileNotificationService.sendLocalTestNotification();
+    } catch (err: any) {
+      set({ error: err.message });
     }
   },
 

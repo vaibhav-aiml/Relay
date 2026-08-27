@@ -270,6 +270,9 @@ export async function scheduleRoutes(app: FastifyInstance) {
 
     if (pushToken && typeof pushToken === 'string') {
       user.profile.pushToken = pushToken;
+      if (db.updateUserPushToken) {
+        await db.updateUserPushToken(user.id, pushToken);
+      }
     }
     if (timezone && typeof timezone === 'string') {
       user.profile.timezone = timezone;

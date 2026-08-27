@@ -2,13 +2,10 @@ import { Task, TaskEvent, Approval, Connection, Memory, HealthResponse, UserCont
 import Constants from 'expo-constants';
 
 const getBaseUrl = (): string => {
-  // 1. Try to dynamically detect the Metro bundler IP (works on physical devices over Wi-Fi/LAN)
-  const hostUri = Constants.expoConfig?.hostUri;
-  if (hostUri) {
-    const ip = hostUri.split(':')[0];
-    if (ip && ip !== 'localhost' && ip !== '127.0.0.1') {
-      return `http://${ip}:4000`;
-    }
+  // 1. Web browser environment
+  if (typeof window !== 'undefined' && (window as any).location && (window as any).location.hostname) {
+    const hostname = (window as any).location.hostname;
+    return `http://${hostname}:4000`;
   }
 
   // 2. Fall back to environment variable if configured
@@ -16,8 +13,17 @@ const getBaseUrl = (): string => {
     return process.env.EXPO_PUBLIC_BACKEND_API_URL;
   }
 
-  // 3. Active LAN fallback
-  return 'http://192.168.1.5:4000';
+  // 3. Dynamically detect Metro host IP (physical devices & emulators)
+  const hostUri = Constants.expoConfig?.hostUri;
+  if (hostUri) {
+    const ip = hostUri.split(':')[0];
+    if (ip) {
+      return `http://${ip}:4000`;
+    }
+  }
+
+  // 4. Default LAN fallback
+  return 'http://192.168.1.9:4000';
 };
 
 const BASE_URL = getBaseUrl();

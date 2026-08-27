@@ -190,10 +190,11 @@ export class SchedulerDaemon {
 
     // 3. Send initial Push Notification if enabled
     if (routine.notificationType !== 'silent' && user.profile.pushToken) {
-      sendPushNotification(user.profile.pushToken, {
+      sendPushNotification(this.db, user.id, user.profile.pushToken, {
         title: `Relay Routine: ${routine.name}`,
         body: `Running your routine: "${routine.goal.slice(0, 80)}"`,
-        data: { routineId: routine.id, taskId: task.id },
+        channelId: 'relay-updates',
+        data: { routineId: routine.id, taskId: task.id, type: 'routine_started' },
       }).catch(() => {});
     }
 
@@ -208,15 +209,6 @@ export class SchedulerDaemon {
         routine.consecutiveFailures = 0;
       } else if (finalTask.status === 'WAITING_APPROVAL') {
         routine.lastStatus = 'running';
-        // Send urgent Push Notification for approval
-        if (user.profile.pushToken) {
-          sendPushNotification(user.profile.pushToken, {
-            title: `Action Approval Needed`,
-            body: `Routine "${routine.name}" needs your approval to proceed with ${finalTask.pendingApproval?.toolName || 'an action'}.`,
-            data: { routineId: routine.id, taskId: finalTask.id, approvalId: finalTask.pendingApproval?.id },
-            priority: 'high',
-          }).catch(() => {});
-        }
       } else {
         routine.lastStatus = 'failed';
         routine.consecutiveFailures = (routine.consecutiveFailures || 0) + 1;

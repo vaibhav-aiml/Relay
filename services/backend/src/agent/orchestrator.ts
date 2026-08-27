@@ -5,6 +5,7 @@ import { ToolRegistry } from '../tools/registry.js';
 import { PolicyEngine } from '../permissions/policy.js';
 import { Planner } from './planner.js';
 import { AgentContext } from './context.js';
+import { dispatchApprovalAlert, dispatchTaskCompletionAlert, dispatchTaskFailureAlert } from '../scheduler/notifications.js';
 
 export class AgentOrchestrator {
   private db: IDatabaseRepository;
@@ -42,7 +43,7 @@ export class AgentOrchestrator {
       if (currentTask.iterations >= AGENT_CONFIG.MAX_ITERATIONS) {
         currentTask.status = 'FAILED';
         currentTask.error = `Agent exceeded maximum allowed iterations (${AGENT_CONFIG.MAX_ITERATIONS})`;
-        await this.finalizeTask(currentTask);
+        await this.finalizeTask(currentTask, user);
         return currentTask;
       }
 
@@ -50,7 +51,7 @@ export class AgentOrchestrator {
       if (elapsed >= AGENT_CONFIG.MAX_DURATION_MS) {
         currentTask.status = 'FAILED';
         currentTask.error = `Agent exceeded maximum execution duration (${AGENT_CONFIG.MAX_DURATION_MS / 1000}s)`;
-        await this.finalizeTask(currentTask);
+        await this.finalizeTask(currentTask, user);
         return currentTask;
       }
 
@@ -65,7 +66,7 @@ export class AgentOrchestrator {
       } catch (plannerErr: any) {
         currentTask.status = 'FAILED';
         currentTask.error = `Planner failed: ${plannerErr.message}`;
-        await this.finalizeTask(currentTask);
+        await this.finalizeTask(currentTask, user);
         return currentTask;
       }
 
@@ -78,7 +79,7 @@ export class AgentOrchestrator {
           if (!toolDef) {
             currentTask.status = 'FAILED';
             currentTask.error = `Requested tool '${toolCall.name}' is not registered`;
-            await this.finalizeTask(currentTask);
+            await this.finalizeTask(currentTask, user);
             return currentTask;
           }
 
@@ -111,7 +112,7 @@ export class AgentOrchestrator {
               message: currentTask.error,
               safeMetadata: { capability: toolDef.requiredPermission },
             });
-            await this.finalizeTask(currentTask);
+            await this.finalizeTask(currentTask, user);
             return currentTask;
           }
 
@@ -157,6 +158,13 @@ export class AgentOrchestrator {
               safeMetadata: { approvalId: approval.id, riskLevel: policy.riskLevel },
             });
 
+            // Centralized fire-and-forget push alert for all task sources
+            if (user.profile?.pushToken) {
+              dispatchApprovalAlert(this.db, user, currentTask, approval).catch((err) => {
+                console.warn(`[AgentOrchestrator] Non-blocking push notification failed: ${err.message}`);
+              });
+            }
+
             await this.db.saveTask(currentTask);
             return currentTask; // Pause loop until user approval
           }
@@ -190,7 +198,7 @@ export class AgentOrchestrator {
               message: executionResult.error,
               safeMetadata: { stepNumber },
             });
-            await this.finalizeTask(currentTask);
+            await this.finalizeTask(currentTask, user);
             return currentTask;
           }
 
@@ -219,7 +227,7 @@ export class AgentOrchestrator {
         currentTask.status = 'COMPLETED';
         currentTask.completedAt = new Date().toISOString();
 
-        await this.finalizeTask(currentTask);
+        await this.finalizeTask(currentTask, user);
         return currentTask;
       }
     }
@@ -255,7 +263,7 @@ export class AgentOrchestrator {
     if (decision === 'denied') {
       task.status = 'CANCELLED';
       task.error = `Action denied by user: ${approval.description}`;
-      await this.finalizeTask(task);
+      await this.finalizeTask(task, user);
       return task;
     }
 
@@ -264,7 +272,7 @@ export class AgentOrchestrator {
     if (!toolDef) {
       task.status = 'FAILED';
       task.error = `Approved tool ${approval.toolName} not found`;
-      await this.finalizeTask(task);
+      await this.finalizeTask(task, user);
       return task;
     }
 
@@ -277,7 +285,7 @@ export class AgentOrchestrator {
     if (!executionResult.success) {
       task.status = 'FAILED';
       task.error = executionResult.error;
-      await this.finalizeTask(task);
+      await this.finalizeTask(task, user);
       return task;
     }
 
@@ -366,7 +374,7 @@ export class AgentOrchestrator {
     return this.runTask(task, user, customPlanner);
   }
 
-  private async finalizeTask(task: Task): Promise<void> {
+  private async finalizeTask(task: Task, user?: User): Promise<void> {
     task.updatedAt = new Date().toISOString();
     await this.db.saveTask(task);
     await this.db.logEvent({
@@ -376,5 +384,18 @@ export class AgentOrchestrator {
       message: task.status === 'COMPLETED' ? `Task completed successfully` : `Task ended with status: ${task.status}`,
       safeMetadata: { finalStatus: task.status },
     });
+
+    // Notify user on completion or failure for unattended scheduled routines
+    if (task.source === 'scheduled' && user?.profile?.pushToken) {
+      if (task.status === 'COMPLETED') {
+        dispatchTaskCompletionAlert(this.db, user, task).catch((err) => {
+          console.warn(`[AgentOrchestrator] Failed to dispatch completion push: ${err.message}`);
+        });
+      } else if (task.status === 'FAILED') {
+        dispatchTaskFailureAlert(this.db, user, task).catch((err) => {
+          console.warn(`[AgentOrchestrator] Failed to dispatch failure push: ${err.message}`);
+        });
+      }
+    }
   }
 }
