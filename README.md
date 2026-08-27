@@ -170,11 +170,25 @@ relay/
 | **Deep-Link Routing** | Tap any notification or action to deep-link directly into the live task screen at `/task/[id]` |
 | **In-App Management** | Settings screen with push permission status pill, device push token copy, and one-tap test alert simulation |
 
+### 🎙️ Two-Way Voice & Text-to-Speech (TTS Spoken Agent)
+
+| Feature | Capabilities |
+|---|---|
+| **Hands-Free Conversational Voice Mode** | Full-screen interactive voice overlay with continuous state machine loop: `IDLE` → `LISTENING` → `PROCESSING` → `SPEAKING` → `LISTENING` |
+| **Real-Time Word-by-Word Streaming** | Live typewriter word-streaming animation rendered in real-time as Relay speaks, dynamically synchronized to the TTS speech rate |
+| **Animated Audio Waveforms** | 7-bar audio waveform visualizer (`AudioVisualizer`) with staggered amplitude oscillation for listening (red) and speaking (indigo) modes |
+| **Device-Native TTS** | Zero API keys required — leverages `expo-speech` with sentence-level chunking to avoid Android buffer truncation |
+| **Transition-Edge Auto-Speak Guard** | Edge-triggered speech engine prevents repetitive audio playback during continuous status polling on approval gates |
+| **Voice Customization & Testing** | Settings dashboard with speed presets (0.8x–1.5x), pitch tuning, device voice selector, and interactive "Test Spoken Voice" preview |
+| **Read Aloud on Demand** | Tap the speaker icon on any completed task to replay spoken summaries with an inline waveform indicator |
+
 ### 📱 Mobile Experience
 
 | Feature | Details |
 |---|---|
-| **Voice Input** | Speak your goal — transcribed via Groq Whisper and sent to the agent |
+| **Conversational Voice Mode** | Full-screen hands-free voice loop with floating action button (FAB) trigger |
+| **Spoken Agent Responses** | Relay speaks verified answers and approval prompts directly through device speakers |
+| **Real-Time Waveform Visualizer** | Live pulsing audio bars during voice capture and speech synthesis |
 | **Routines Dashboard** | Dedicated tab for managing schedules, 1-tap template setups, and immediate "▶️ Run Now" test triggers |
 | **Push Alerts & Action Buttons** | Rich notifications for approval sign-offs with direct one-tap [Approve] / [Reject] actions |
 | **Live Step Trace** | Real-time visualization of agent planning and execution steps |
@@ -190,9 +204,9 @@ relay/
 | Layer | Technology |
 |---|---|
 | **Language** | TypeScript 5.7 (strict mode, ES2022) |
-| **Mobile** | React Native 0.81 · Expo 54 · Expo Router · Zustand |
+| **Mobile** | React Native 0.81 · Expo 54 · Expo Router · Zustand · expo-speech · expo-av |
 | **Backend** | Fastify 5 · Pino logger · Node.js · cron-parser |
-| **AI Providers** | Groq SDK (Llama 3.3 70B) · Google Generative AI (Gemini) · Anthropic SDK (Claude) |
+| **AI Providers** | Groq SDK (Llama 3.3 70B & Whisper Large v3) · Google Generative AI (Gemini) · Anthropic SDK (Claude) |
 | **Database** | Firebase Admin / Firestore (production) · In-Memory DB (development) |
 | **Auth & APIs** | Google OAuth2 · googleapis · Firebase Auth · Expo Push API |
 | **Validation** | Zod schema validation |
@@ -293,7 +307,8 @@ All endpoints are prefixed with `/api`.
 | `POST` | `/api/schedules/:id/run` | Manually trigger an immediate execution of a routine |
 | `DELETE` | `/api/schedules/:id` | Delete/cancel a scheduled routine |
 | `POST` | `/api/schedules/push-token` | Register device Expo push token and timezone |
-| `POST` | `/api/voice/transcribe` | Transcribe audio to text (multipart upload, 25MB max) |
+| `POST` | `/api/voice/transcribe` | Transcribe audio to text (Groq Whisper, multipart upload / base64) |
+| `POST` | `/api/voice/format-for-speech` | Clean and format agent text responses for spoken TTS delivery |
 | `GET` | `/api/connections/google/auth-url` | Get Google OAuth2 authorization URL |
 | `GET` | `/api/connections/google/callback` | OAuth2 callback handler |
 | `GET` | `/api/memory` | Retrieve stored user preferences |
@@ -314,7 +329,7 @@ npm test
 # Unit tests only (Scheduler, Cron, Tools, Policies, Security)
 npm run test:unit
 
-# Integration tests (REST API lifecycle, Orchestrator)
+# Integration tests (REST API lifecycle, Orchestrator, Voice API)
 npm run test:integration
 
 # End-to-end scenario tests
@@ -353,6 +368,7 @@ stateDiagram-v2
 - [x] 💬 WhatsApp, SMS, and native telephony calling integration
 - [x] 📅 Google Workspace Gmail & Calendar full lifecycle
 - [x] 🔔 Push notifications & interactive action buttons for approval requests
+- [x] 🎙️ Two-way voice loop & real-time spoken TTS conversational agent
 - [ ] 🌍 Multi-language voice support
 - [ ] 🏠 Smart home integrations (IoT)
 - [ ] 📊 Task analytics dashboard
