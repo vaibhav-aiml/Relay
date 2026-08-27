@@ -159,12 +159,24 @@ relay/
 | **Argument Sanitization** | Dedicated `validateArgs` security module prevents injection via tool arguments |
 | **Token Encryption** | OAuth tokens encrypted at rest with **AES-256-GCM** |
 
+### 🔔 Real-time Push Notifications & Action Alerts
+
+| Component | Capabilities |
+|---|---|
+| **Urgent Approval Sign-Offs** | Real-time heads-up notification dispatched automatically whenever an agent hits a `WAITING_APPROVAL` gate |
+| **Interactive Action Buttons** | Notification buttons (`Approve`, `Reject`, `View Task`) allow immediate sign-off directly from the notification shade without searching for the task |
+| **Android Notification Channels** | High-importance channel `relay-approvals` (MAX priority, vibration, custom LED lights) and `relay-updates` (routine starts & completions) |
+| **Dead-Token Self-Healing** | Automatic token unregistration when `DeviceNotRegistered` ticket receipts are detected from Expo push service |
+| **Deep-Link Routing** | Tap any notification or action to deep-link directly into the live task screen at `/task/[id]` |
+| **In-App Management** | Settings screen with push permission status pill, device push token copy, and one-tap test alert simulation |
+
 ### 📱 Mobile Experience
 
 | Feature | Details |
 |---|---|
 | **Voice Input** | Speak your goal — transcribed via Groq Whisper and sent to the agent |
 | **Routines Dashboard** | Dedicated tab for managing schedules, 1-tap template setups, and immediate "▶️ Run Now" test triggers |
+| **Push Alerts & Action Buttons** | Rich notifications for approval sign-offs with direct one-tap [Approve] / [Reject] actions |
 | **Live Step Trace** | Real-time visualization of agent planning and execution steps |
 | **Approval Cards** | Rich UI cards for reviewing and approving/rejecting sensitive actions |
 | **Task History** | Searchable multi-dimensional history of all past tasks with status and results |
@@ -340,7 +352,7 @@ stateDiagram-v2
 - [x] 🍕 AI food ordering with multi-platform comparison & preference memory
 - [x] 💬 WhatsApp, SMS, and native telephony calling integration
 - [x] 📅 Google Workspace Gmail & Calendar full lifecycle
-- [ ] 🔔 Push notifications for urgent approval requests
+- [x] 🔔 Push notifications & interactive action buttons for approval requests
 - [ ] 🌍 Multi-language voice support
 - [ ] 🏠 Smart home integrations (IoT)
 - [ ] 📊 Task analytics dashboard
