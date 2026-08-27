@@ -438,7 +438,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   speakResponse: async (text: string) => {
-    if (!get().ttsEnabled) return;
+    if (!get().ttsEnabled || get().isSpeaking) return;
     try {
       set({ isSpeaking: true });
       await TTSService.speakConcise(text);

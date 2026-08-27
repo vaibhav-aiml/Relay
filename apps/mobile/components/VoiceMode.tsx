@@ -51,6 +51,8 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
   const pollCleanupRef = useRef<(() => void) | null>(null);
   const autoRelistenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const activeTaskIdRef = useRef<string | null>(null);
+  const handledTaskIdsRef = useRef<Set<string>>(new Set());
 
   // Handle hardware back button
   useEffect(() => {
@@ -75,25 +77,35 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
 
   // Monitor task completion for auto-speak
   useEffect(() => {
-    if (voiceState !== 'PROCESSING' || !currentTask) return;
+    if (voiceState !== 'PROCESSING' || !currentTask || !activeTaskIdRef.current) return;
+
+    // CRITICAL: Only process if currentTask matches the ACTIVE task launched in this turn
+    if (currentTask.id !== activeTaskIdRef.current) return;
+
+    // Ensure each task transition is only handled once
+    if (handledTaskIdsRef.current.has(currentTask.id)) return;
 
     if (currentTask.status === 'COMPLETED' && currentTask.finalAnswer) {
+      handledTaskIdsRef.current.add(currentTask.id);
       handleRelayResponse(currentTask.finalAnswer);
     } else if (
       currentTask.status === 'WAITING_APPROVAL' &&
       currentTask.pendingApproval
     ) {
+      handledTaskIdsRef.current.add(currentTask.id);
       handleRelayResponse(
         `I need your approval to ${currentTask.pendingApproval.description}. Please check the approval card on screen.`,
       );
     } else if (currentTask.status === 'FAILED') {
+      handledTaskIdsRef.current.add(currentTask.id);
       handleRelayResponse(
         currentTask.error || 'Sorry, I encountered an error processing that request.',
       );
     } else if (currentTask.status === 'CANCELLED') {
+      handledTaskIdsRef.current.add(currentTask.id);
       handleRelayResponse('That task was cancelled.');
     }
-  }, [currentTask?.status, voiceState]);
+  }, [currentTask?.status, currentTask?.id, voiceState]);
 
   // Scroll to bottom on transcript updates
   useEffect(() => {
@@ -112,6 +124,8 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
   }, [isMuted, startRecording]);
 
   const handleStopAndProcess = useCallback(async () => {
+    // Clear active task reference for new turn
+    activeTaskIdRef.current = null;
     setVoiceState('PROCESSING');
     setCurrentText('Transcribing your voice...');
 
@@ -131,8 +145,9 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
     setCurrentText('Relay is reasoning...');
 
     try {
-      // Create task and start polling
+      // Create task and lock activeTaskIdRef to new task
       const task = await createTask(transcribedText);
+      activeTaskIdRef.current = task.id;
       pollCleanupRef.current = pollTaskUntilDone(task.id);
     } catch (err: any) {
       handleRelayResponse(
@@ -165,7 +180,7 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
       // Start real-time word-by-word streaming typewriter animation synced to speech rate
       let wordIndex = 0;
       const rate = TTSService.getSettings().rate || 1.0;
-      const wordIntervalMs = Math.max(120, Math.floor(320 / rate));
+      const wordIntervalMs = Math.max(100, Math.floor(300 / rate));
 
       if (words.length > 1) {
         streamingTimerRef.current = setInterval(() => {
@@ -175,11 +190,14 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
             setCurrentText(currentStreamed);
             setTranscript((prev) => {
               const updated = [...prev];
-              if (updated.length > 0 && updated[updated.length - 1].role === 'relay') {
-                updated[updated.length - 1] = {
-                  ...updated[updated.length - 1],
-                  text: currentStreamed,
-                };
+              for (let i = updated.length - 1; i >= 0; i--) {
+                if (updated[i].role === 'relay') {
+                  updated[i] = {
+                    ...updated[i],
+                    text: currentStreamed,
+                  };
+                  break;
+                }
               }
               return updated;
             });
@@ -206,11 +224,14 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
         setCurrentText(formattedSpoken);
         setTranscript((prev) => {
           const updated = [...prev];
-          if (updated.length > 0 && updated[updated.length - 1].role === 'relay') {
-            updated[updated.length - 1] = {
-              ...updated[updated.length - 1],
-              text: formattedSpoken,
-            };
+          for (let i = updated.length - 1; i >= 0; i--) {
+            if (updated[i].role === 'relay') {
+              updated[i] = {
+                ...updated[i],
+                text: formattedSpoken,
+              };
+              break;
+            }
           }
           return updated;
         });
@@ -228,7 +249,9 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
   );
 
   const handleClose = useCallback(() => {
-    // Clean up all resources and timers
+    // Clean up all resources, task references, and timers
+    activeTaskIdRef.current = null;
+    handledTaskIdsRef.current.clear();
     if (streamingTimerRef.current) {
       clearInterval(streamingTimerRef.current);
       streamingTimerRef.current = null;

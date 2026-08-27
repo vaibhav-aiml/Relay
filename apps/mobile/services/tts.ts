@@ -30,6 +30,7 @@ const DEFAULT_SETTINGS: TTSSettings = {
  */
 class TTSServiceClass {
   private settings: TTSSettings = { ...DEFAULT_SETTINGS };
+  private defaultVoiceId?: string;
   private initialized = false;
   private speakingPromiseResolve: (() => void) | null = null;
 
@@ -42,6 +43,16 @@ class TTSServiceClass {
       if (stored) {
         const parsed = JSON.parse(stored);
         this.settings = { ...DEFAULT_SETTINGS, ...parsed };
+      }
+      // Pin a consistent default English voice if none is explicitly saved
+      if (!this.settings.voiceId) {
+        const voices = await this.getAvailableVoices();
+        const preferredVoice =
+          voices.find((v) => v.language.toLowerCase().includes('en-us') || v.language.toLowerCase().includes('en_us')) ||
+          voices.find((v) => v.language.toLowerCase().startsWith('en'));
+        if (preferredVoice) {
+          this.defaultVoiceId = preferredVoice.identifier;
+        }
       }
     } catch {
       // Defaults are fine
@@ -75,18 +86,18 @@ class TTSServiceClass {
 
     const rate = options?.rate ?? this.settings.rate;
     const pitch = options?.pitch ?? this.settings.pitch;
-    const voiceId = options?.voiceId ?? this.settings.voiceId;
+    const voiceId = options?.voiceId ?? this.settings.voiceId ?? this.defaultVoiceId;
 
     const chunks = this.chunkText(text);
 
     for (const chunk of chunks) {
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve) => {
         this.speakingPromiseResolve = resolve;
 
         const speechOptions: Speech.SpeechOptions = {
           rate,
           pitch,
-          language: 'en',
+          language: 'en-US',
           onDone: () => {
             this.speakingPromiseResolve = null;
             resolve();

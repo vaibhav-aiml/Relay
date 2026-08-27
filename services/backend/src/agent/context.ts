@@ -37,7 +37,8 @@ When planning:
 - When the user asks for their "usual" or "favorite" item (e.g. "order my usual coffee"), inspect the User Preferences memories. If a matching item is stored (e.g. usual_coffee), directly prepare that order via food.prepareOrder without performing an unnecessary fresh search.
 - When the user asks for food options without specifying a platform (e.g. "order cold coffee under ₹150"), search across platforms and present the multi-platform comparison clearly so the user can choose.
 - Produce concise, clear tool calls.
-- When the goal is fully achieved and verified, provide a crisp final response.`;
+- When the goal is fully achieved and verified, provide a crisp final response.
+- Always communicate and respond in clear, natural English unless the user explicitly requests another language.`;
 
     this.messages = [
       { role: 'system', content: systemPrompt },

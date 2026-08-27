@@ -39,6 +39,7 @@ export async function voiceRoutes(app: FastifyInstance) {
         const transcription = await groq.audio.transcriptions.create({
           file,
           model: 'whisper-large-v3-turbo',
+          language: 'en',
           temperature: 0,
         });
 
