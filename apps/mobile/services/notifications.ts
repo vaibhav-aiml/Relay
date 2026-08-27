@@ -145,12 +145,11 @@ export class MobileNotificationService {
       try {
         const projectId =
           Constants.expoConfig?.extra?.eas?.projectId ||
-          Constants.easConfig?.projectId ||
-          'relay-pilot-project';
+          Constants.easConfig?.projectId;
 
-        const tokenRes = await Notifications.getExpoPushTokenAsync({
-          projectId,
-        });
+        const tokenRes = await Notifications.getExpoPushTokenAsync(
+          projectId ? { projectId } : undefined
+        );
         token = tokenRes.data;
       } catch (tokenErr: any) {
         console.warn('[MobileNotificationService] getExpoPushTokenAsync warning:', tokenErr.message);
