@@ -17,7 +17,7 @@ LogBox.ignoreLogs([
 export default function RootLayout() {
   const router = useRouter();
   const lastNotificationResponse = Notifications.useLastNotificationResponse();
-  const { submitApproval, checkPushPermission } = useAppStore();
+  const { submitApproval, checkPushPermission, initTTSSettings } = useAppStore();
   const responseListener = useRef<any>(null);
 
   // 1. Cold-start notification handling
@@ -33,10 +33,11 @@ export default function RootLayout() {
     }
   }, [lastNotificationResponse]);
 
-  // 2. Setup channels, categories, and live notification response listener
+  // 2. Setup channels, categories, live notification response listener & hydrate TTS settings
   useEffect(() => {
     MobileNotificationService.setupChannelsAndCategories().catch(console.warn);
     checkPushPermission().catch(console.warn);
+    initTTSSettings().catch(console.warn);
 
     responseListener.current = Notifications.addNotificationResponseReceivedListener((response) => {
       MobileNotificationService.handleNotificationResponse(

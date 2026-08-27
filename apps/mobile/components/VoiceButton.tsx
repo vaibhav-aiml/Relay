@@ -1,132 +1,26 @@
-import React, { useState, useRef } from 'react';
-import { View, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, Alert } from 'react-native';
+import React from 'react';
+import { View, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Mic, MicOff } from 'lucide-react-native';
-import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
-import { ApiService } from '../services/api';
+import { useVoiceRecording } from '../hooks/useVoiceRecording';
+import { AudioVisualizer } from './AudioVisualizer';
 
 interface VoiceButtonProps {
   onTranscribe: (text: string) => void;
   disabled?: boolean;
 }
 
+/**
+ * Press-to-talk mic button component.
+ *
+ * Now delegates recording logic to the shared useVoiceRecording hook
+ * (which guarantees TTSService.stop() on startRecording) and shows
+ * a compact AudioVisualizer during recording.
+ */
 export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscribe, disabled = false }) => {
-  const [isRecording, setIsRecording] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const { isRecording, isTranscribing, startRecording, stopAndTranscribe } =
+    useVoiceRecording();
 
-  const startRecording = async () => {
-    try {
-      // Request microphone permission
-      const permStatus = await Audio.requestPermissionsAsync();
-      if (!permStatus.granted) {
-        Alert.alert('Microphone Permission Required', 'Relay needs microphone access to capture your voice commands.');
-        return;
-      }
-
-      // Configure audio mode for recording
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      // Start recording with high quality settings
-      const { recording } = await Audio.Recording.createAsync(
-        {
-          android: {
-            extension: '.m4a',
-            outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-            audioEncoder: Audio.AndroidAudioEncoder.AAC,
-            sampleRate: 44100,
-            numberOfChannels: 1,
-            bitRate: 128000,
-          },
-          ios: {
-            extension: '.m4a',
-            outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-            audioQuality: Audio.IOSAudioQuality.HIGH,
-            sampleRate: 44100,
-            numberOfChannels: 1,
-            bitRate: 128000,
-          },
-          web: {
-            mimeType: 'audio/webm',
-            bitsPerSecond: 128000,
-          },
-        }
-      );
-
-      recordingRef.current = recording;
-      setIsRecording(true);
-    } catch (err: any) {
-      console.warn('Failed to start recording:', err);
-      Alert.alert('Recording Error', `Could not start voice recording: ${err.message}`);
-    }
-  };
-
-  const stopRecordingAndTranscribe = async () => {
-    if (!recordingRef.current) return;
-
-    setIsRecording(false);
-    setIsLoading(true);
-
-    try {
-      // Stop the recording
-      await recordingRef.current.stopAndUnloadAsync();
-
-      // Reset audio mode
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-      });
-
-      // Get the recorded file URI
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
-
-      if (!uri) {
-        throw new Error('No audio file was created');
-      }
-
-      // Read the file as base64
-      let audioBase64: string;
-      if (Platform.OS === 'web') {
-        // On web, fetch the blob and convert
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        audioBase64 = await new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const result = reader.result as string;
-            resolve(result.split(',')[1] || result);
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } else {
-        // On native (iOS / Android), use FileSystem to read as base64
-        audioBase64 = await FileSystem.readAsStringAsync(uri, {
-          encoding: 'base64',
-        });
-      }
-
-      if (!audioBase64 || audioBase64.length < 100) {
-        throw new Error('Recording was too short or empty. Please speak for at least 1 second.');
-      }
-
-      // Send to backend Whisper transcription endpoint
-      const res = await ApiService.transcribeVoice(audioBase64);
-      if (res.text && res.text.trim().length > 0) {
-        onTranscribe(res.text.trim());
-      } else {
-        Alert.alert('No Speech Detected', 'Relay could not detect speech. Please try again and speak clearly.');
-      }
-    } catch (err: any) {
-      console.warn('Voice transcription failed:', err);
-      Alert.alert('Voice Error', err.message || 'Transcription failed. Make sure the backend is running.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const isLoading = isTranscribing;
 
   const handleToggleVoice = async () => {
     if (disabled || isLoading) return;
@@ -134,12 +28,20 @@ export const VoiceButton: React.FC<VoiceButtonProps> = ({ onTranscribe, disabled
     if (!isRecording) {
       await startRecording();
     } else {
-      await stopRecordingAndTranscribe();
+      const text = await stopAndTranscribe();
+      if (text) {
+        onTranscribe(text);
+      }
     }
   };
 
   return (
     <View style={styles.wrapper}>
+      {isRecording && (
+        <View style={styles.visualizerRow}>
+          <AudioVisualizer mode="listening" size="compact" />
+        </View>
+      )}
       {isRecording && <View style={styles.pulseRing} />}
       <TouchableOpacity
         style={[
@@ -168,6 +70,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 54,
     height: 54,
+  },
+  visualizerRow: {
+    position: 'absolute',
+    top: -28,
   },
   pulseRing: {
     position: 'absolute',

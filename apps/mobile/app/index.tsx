@@ -11,13 +11,14 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowUpRight, Sparkles, Send, Clock } from 'lucide-react-native';
+import { ArrowUpRight, Sparkles, Send, Clock, Mic } from 'lucide-react-native';
 
 import { Header } from '../components/Header';
 import { VoiceButton } from '../components/VoiceButton';
 import { TaskStatusLive } from '../components/TaskStatusLive';
 import { ApprovalCard } from '../components/ApprovalCard';
 import { TaskCard } from '../components/TaskCard';
+import { VoiceMode } from '../components/VoiceMode';
 import { useAppStore } from '../store/useAppStore';
 
 const QUICK_PROMPTS = [
@@ -35,6 +36,7 @@ const QUICK_PROMPTS = [
 export default function HomeScreen() {
   const router = useRouter();
   const [goalInput, setGoalInput] = useState('');
+  const [voiceModeVisible, setVoiceModeVisible] = useState(false);
 
   const {
     currentTask,
@@ -197,6 +199,23 @@ export default function HomeScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Voice Mode FAB */}
+      <TouchableOpacity
+        style={styles.voiceModeFab}
+        onPress={() => setVoiceModeVisible(true)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.voiceModeFabInner}>
+          <Mic size={24} color="#ffffff" />
+        </View>
+      </TouchableOpacity>
+
+      {/* Voice Mode Overlay */}
+      <VoiceMode
+        visible={voiceModeVisible}
+        onClose={() => setVoiceModeVisible(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -365,6 +384,27 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#94a3b8',
     marginTop: 2,
+  },
+  voiceModeFab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    zIndex: 50,
+  },
+  voiceModeFabInner: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    backgroundColor: '#6366f1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#6366f1',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 8,
+    borderWidth: 2,
+    borderColor: 'rgba(129, 140, 248, 0.4)',
   },
 });
 

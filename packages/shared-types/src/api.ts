@@ -87,6 +87,17 @@ export interface VoiceTranscribeResponse {
   durationSeconds?: number;
 }
 
+export interface VoiceFormatRequest {
+  text: string;
+  maxLength?: number;
+}
+
+export interface VoiceFormatResponse {
+  spokenText: string;
+  fullText: string;
+  truncated: boolean;
+}
+
 export interface HealthResponse {
   status: 'ok' | 'degraded';
   timestamp: string;

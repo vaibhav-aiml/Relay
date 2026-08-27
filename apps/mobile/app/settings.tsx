@@ -11,11 +11,13 @@ import {
   Alert,
   Platform,
 } from 'react-native';
-import { Brain, Cpu, Volume2, Plus, Trash2, ShieldAlert, Users, RefreshCw, Globe, ExternalLink, ShieldCheck, Clock, Bell, BellRing, CheckCircle2, AlertCircle, Send, Check } from 'lucide-react-native';
+import { Brain, Cpu, Volume2, Plus, Trash2, ShieldAlert, Users, RefreshCw, Globe, ExternalLink, ShieldCheck, Clock, Bell, BellRing, CheckCircle2, AlertCircle, Send, Check, Play } from 'lucide-react-native';
 import { Linking, ActivityIndicator } from 'react-native';
 import { Header } from '../components/Header';
 import { useAppStore } from '../store/useAppStore';
 import { ApiService } from '../services/api';
+import { TTSService, TTSSettings } from '../services/tts';
+import * as Speech from 'expo-speech';
 
 
 export default function SettingsScreen() {
@@ -37,13 +39,17 @@ export default function SettingsScreen() {
     checkPushPermission,
     requestPushPermissionAndRegister,
     sendTestPushNotification,
+    ttsEnabled,
+    toggleTTS,
   } = useAppStore();
 
   const [newKey, setNewKey] = useState('');
   const [newValue, setNewValue] = useState('');
-  const [voiceTTS, setVoiceTTS] = useState(true);
   const [connectingGoogle, setConnectingGoogle] = useState(false);
   const [isSendingTestPush, setIsSendingTestPush] = useState(false);
+  const [isTestingVoice, setIsTestingVoice] = useState(false);
+  const [ttsSettings, setTtsSettings] = useState<TTSSettings>(TTSService.getSettings());
+  const [availableVoices, setAvailableVoices] = useState<Speech.Voice[]>([]);
   const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
 
   useEffect(() => {
@@ -51,7 +57,33 @@ export default function SettingsScreen() {
     fetchSyncedContacts();
     fetchConnections();
     checkPushPermission();
+    TTSService.init().then(setTtsSettings);
+    TTSService.getAvailableVoices().then(setAvailableVoices);
   }, []);
+
+  const handleUpdateTtsSettings = async (updates: Partial<TTSSettings>) => {
+    const next = await TTSService.saveSettings(updates);
+    setTtsSettings(next);
+  };
+
+  const handleTestVoice = async () => {
+    if (isTestingVoice) return;
+    setIsTestingVoice(true);
+    try {
+      await TTSService.speak(
+        'Hello! Relay is ready to speak autonomous mission updates and confirmations back to you.',
+        {
+          rate: ttsSettings.rate,
+          pitch: ttsSettings.pitch,
+          voiceId: ttsSettings.voiceId,
+        }
+      );
+    } catch (err) {
+      console.warn('Voice test failed:', err);
+    } finally {
+      setIsTestingVoice(false);
+    }
+  };
 
   const googleConn = connections.find((c) => c.provider === 'google' && c.status === 'active');
 
@@ -320,21 +352,156 @@ export default function SettingsScreen() {
 
           <View style={styles.divider} />
 
+          {/* Master Voice Readout (TTS) Toggle */}
           <View style={styles.settingRow}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
               <Volume2 size={16} color="#94a3b8" />
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={styles.settingLabel}>Voice Readout (TTS)</Text>
-                <Text style={styles.settingSub}>Speak verified answers using on-device speech</Text>
+                <Text style={styles.settingSub}>Speak verified answers and confirmations using on-device speech</Text>
               </View>
             </View>
             <Switch
-              value={voiceTTS}
-              onValueChange={setVoiceTTS}
+              value={ttsEnabled}
+              onValueChange={toggleTTS}
               trackColor={{ false: '#334155', true: '#6366f1' }}
               thumbColor="#ffffff"
             />
           </View>
+
+          {/* Sub-controls when TTS is enabled */}
+          {ttsEnabled && (
+            <View style={styles.ttsConfigBox}>
+              {/* Speech Rate Controls */}
+              <View style={styles.ttsOptionRow}>
+                <Text style={styles.ttsOptionLabel}>Speech Speed</Text>
+                <View style={styles.ttsPillGroup}>
+                  {[0.8, 1.0, 1.2, 1.5].map((rate) => (
+                    <TouchableOpacity
+                      key={rate}
+                      style={[
+                        styles.ttsPill,
+                        ttsSettings.rate === rate && styles.ttsPillActive,
+                      ]}
+                      onPress={() => handleUpdateTtsSettings({ rate })}
+                    >
+                      <Text
+                        style={[
+                          styles.ttsPillText,
+                          ttsSettings.rate === rate && styles.ttsPillTextActive,
+                        ]}
+                      >
+                        {rate}x
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Speech Pitch Controls */}
+              <View style={styles.ttsOptionRow}>
+                <Text style={styles.ttsOptionLabel}>Voice Pitch</Text>
+                <View style={styles.ttsPillGroup}>
+                  {[0.8, 1.0, 1.2].map((pitch) => (
+                    <TouchableOpacity
+                      key={pitch}
+                      style={[
+                        styles.ttsPill,
+                        ttsSettings.pitch === pitch && styles.ttsPillActive,
+                      ]}
+                      onPress={() => handleUpdateTtsSettings({ pitch })}
+                    >
+                      <Text
+                        style={[
+                          styles.ttsPillText,
+                          ttsSettings.pitch === pitch && styles.ttsPillTextActive,
+                        ]}
+                      >
+                        {pitch === 0.8 ? 'Low' : pitch === 1.0 ? 'Normal' : 'High'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              {/* Sub-Toggles for Results and Approvals */}
+              <View style={styles.ttsSubToggleRow}>
+                <Text style={styles.ttsSubToggleLabel}>Speak Task Summaries</Text>
+                <Switch
+                  value={ttsSettings.autoSpeakResults}
+                  onValueChange={(val) => handleUpdateTtsSettings({ autoSpeakResults: val })}
+                  trackColor={{ false: '#334155', true: '#818cf8' }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+
+              <View style={styles.ttsSubToggleRow}>
+                <Text style={styles.ttsSubToggleLabel}>Speak Approval Prompts</Text>
+                <Switch
+                  value={ttsSettings.autoSpeakApprovals}
+                  onValueChange={(val) => handleUpdateTtsSettings({ autoSpeakApprovals: val })}
+                  trackColor={{ false: '#334155', true: '#818cf8' }}
+                  thumbColor="#ffffff"
+                />
+              </View>
+
+              {/* Device Voice Selector (if available) */}
+              {availableVoices.length > 0 && (
+                <View style={{ marginTop: 4 }}>
+                  <Text style={styles.ttsOptionLabel}>Available Voices ({availableVoices.length})</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.voiceListScroll}>
+                    <TouchableOpacity
+                      style={[
+                        styles.voicePill,
+                        !ttsSettings.voiceId && styles.voicePillActive,
+                      ]}
+                      onPress={() => handleUpdateTtsSettings({ voiceId: undefined })}
+                    >
+                      <Text style={[styles.voicePillText, !ttsSettings.voiceId && styles.voicePillTextActive]}>
+                        System Default
+                      </Text>
+                    </TouchableOpacity>
+                    {availableVoices.slice(0, 8).map((v) => (
+                      <TouchableOpacity
+                        key={v.identifier}
+                        style={[
+                          styles.voicePill,
+                          ttsSettings.voiceId === v.identifier && styles.voicePillActive,
+                        ]}
+                        onPress={() => handleUpdateTtsSettings({ voiceId: v.identifier })}
+                      >
+                        <Text
+                          style={[
+                            styles.voicePillText,
+                            ttsSettings.voiceId === v.identifier && styles.voicePillTextActive,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {v.name} ({v.language})
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Load-bearing Test Voice Button */}
+              <TouchableOpacity
+                style={[styles.testVoiceBtn, isTestingVoice && styles.testVoiceBtnActive]}
+                onPress={handleTestVoice}
+                disabled={isTestingVoice}
+              >
+                {isTestingVoice ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <Play size={14} color="#ffffff" fill="#ffffff" />
+                    <Text style={styles.testVoiceBtnText}>Test Spoken Voice</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         {/* User Memory & Scheduling Preferences */}
@@ -749,6 +916,106 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  ttsConfigBox: {
+    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+    borderRadius: 12,
+    padding: 14,
+    marginTop: 10,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.04)',
+  },
+  ttsOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  ttsOptionLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#cbd5e1',
+  },
+  ttsPillGroup: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  ttsPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  ttsPillActive: {
+    backgroundColor: '#6366f1',
+    borderColor: '#818cf8',
+  },
+  ttsPillText: {
+    fontSize: 11,
+    color: '#94a3b8',
+    fontWeight: '600',
+  },
+  ttsPillTextActive: {
+    color: '#ffffff',
+    fontWeight: '700',
+  },
+  ttsSubToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 2,
+  },
+  ttsSubToggleLabel: {
+    fontSize: 12,
+    color: '#94a3b8',
+  },
+  voiceListScroll: {
+    marginTop: 6,
+  },
+  voicePill: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    marginRight: 6,
+    maxWidth: 160,
+  },
+  voicePillActive: {
+    backgroundColor: 'rgba(99, 102, 241, 0.25)',
+    borderColor: '#6366f1',
+  },
+  voicePillText: {
+    fontSize: 11,
+    color: '#94a3b8',
+  },
+  voicePillTextActive: {
+    color: '#c7d2fe',
+    fontWeight: '600',
+  },
+  testVoiceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(99, 102, 241, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.4)',
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 4,
+  },
+  testVoiceBtnActive: {
+    backgroundColor: 'rgba(99, 102, 241, 0.4)',
+  },
+  testVoiceBtnText: {
+    color: '#c7d2fe',
+    fontSize: 13,
+    fontWeight: '700',
+  },
 });
+
 
 

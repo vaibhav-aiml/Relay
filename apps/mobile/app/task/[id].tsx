@@ -12,11 +12,12 @@ import {
   Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { ChevronLeft, RefreshCw, Send, Sparkles, CornerDownRight } from 'lucide-react-native';
+import { ChevronLeft, RefreshCw, Send, Sparkles, CornerDownRight, Volume2 } from 'lucide-react-native';
 import { Header } from '../../components/Header';
 import { TaskStatusLive } from '../../components/TaskStatusLive';
 import { ApprovalCard } from '../../components/ApprovalCard';
 import { StepTrace } from '../../components/StepTrace';
+import { AudioVisualizer } from '../../components/AudioVisualizer';
 import { useAppStore } from '../../store/useAppStore';
 
 export default function TaskDetailScreen() {
@@ -29,11 +30,13 @@ export default function TaskDetailScreen() {
     currentTask,
     taskEvents,
     isLoading,
+    isSpeaking,
     fetchTask,
     pollTaskUntilDone,
     submitApproval,
     submitTaskReply,
     cancelCurrentTask,
+    speakResponse,
   } = useAppStore();
 
   useEffect(() => {
@@ -131,6 +134,24 @@ export default function TaskDetailScreen() {
 
           {/* Chronological Step Trace */}
           <StepTrace steps={currentTask.plan || []} events={taskEvents} />
+
+          {/* Manual Read Aloud button for final answer */}
+          {currentTask.finalAnswer && (
+            <TouchableOpacity
+              style={styles.readAloudBtn}
+              onPress={() => speakResponse(currentTask.finalAnswer!)}
+              disabled={isSpeaking}
+            >
+              {isSpeaking ? (
+                <AudioVisualizer mode="speaking" size="compact" />
+              ) : (
+                <>
+                  <Volume2 size={14} color="#818cf8" />
+                  <Text style={styles.readAloudText}>Read Aloud</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          )}
 
           {/* Reply / Follow-up Input Box (Bug 2 Fix: Appears when final answer contains a question) */}
           {isAgentQuestion && (
@@ -308,5 +329,24 @@ const styles = StyleSheet.create({
   },
   replySendBtnDisabled: {
     backgroundColor: 'rgba(99, 102, 241, 0.3)',
+  },
+  readAloudBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(99, 102, 241, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(99, 102, 241, 0.3)',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  readAloudText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#c7d2fe',
   },
 });

@@ -4,6 +4,7 @@ import { Task, TaskEvent, Connection, Memory, UserContact, TaskFilterOptions } f
 import { ApiService } from '../services/api';
 import { DeviceContactsService } from '../services/contacts';
 import { MobileNotificationService } from '../services/notifications';
+import { TTSService } from '../services/tts';
 
 interface AppState {
   currentTask: Task | null;
@@ -19,6 +20,13 @@ interface AppState {
   isPolling: boolean;
   isSyncingContacts: boolean;
   error: string | null;
+
+  // TTS state
+  ttsEnabled: boolean;
+  isSpeaking: boolean;
+  // Transition-edge guard: maps taskId → last status we spoke for.
+  // Prevents re-speaking on every 1200ms poll tick (especially for WAITING_APPROVAL).
+  lastSpokenTaskStatus: Map<string, string>;
 
   // Actions
   createTask: (goal: string) => Promise<Task>;
@@ -39,6 +47,11 @@ interface AppState {
   checkPushPermission: () => Promise<void>;
   requestPushPermissionAndRegister: () => Promise<{ success: boolean; token?: string; error?: string }>;
   sendTestPushNotification: () => Promise<void>;
+
+  // TTS actions
+  initTTSSettings: () => Promise<void>;
+  toggleTTS: () => Promise<void>;
+  speakResponse: (text: string) => Promise<void>;
   clearError: () => void;
 }
 
@@ -57,6 +70,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   isPolling: false,
   isSyncingContacts: false,
   error: null,
+
+  // TTS initial state
+  ttsEnabled: true,
+  isSpeaking: false,
+  lastSpokenTaskStatus: new Map(),
 
   createTask: async (goal: string) => {
     set({ isLoading: true, error: null });
@@ -87,6 +105,27 @@ export const useAppStore = create<AppState>((set, get) => ({
         const { task, events } = await ApiService.getTask(taskId);
         set({ currentTask: task, taskEvents: events });
 
+        // ─── Auto-speak with transition-edge detection ───
+        const { ttsEnabled, lastSpokenTaskStatus, speakResponse } = get();
+        if (ttsEnabled) {
+          const previousStatus = lastSpokenTaskStatus.get(taskId);
+          const currentStatus = task.status;
+
+          // Only speak if status CHANGED since last tick
+          if (currentStatus !== previousStatus) {
+            const settings = TTSService.getSettings();
+            if (currentStatus === 'COMPLETED' && task.finalAnswer && settings.autoSpeakResults) {
+              speakResponse(task.finalAnswer);
+            } else if (currentStatus === 'WAITING_APPROVAL' && task.pendingApproval && settings.autoSpeakApprovals) {
+              speakResponse(`I need your approval to ${task.pendingApproval.description}`);
+            }
+            // Record what we spoke so we don't repeat on next tick
+            const next = new Map(lastSpokenTaskStatus);
+            next.set(taskId, currentStatus);
+            set({ lastSpokenTaskStatus: next });
+          }
+        }
+
         if (
           task.status === 'COMPLETED' ||
           task.status === 'FAILED' ||
@@ -96,6 +135,10 @@ export const useAppStore = create<AppState>((set, get) => ({
           if (task.status !== 'WAITING_APPROVAL') {
             clearInterval(interval);
             set({ isPolling: false });
+            // Clean up edge-guard entry — prevents unbounded Map growth
+            const next = new Map(get().lastSpokenTaskStatus);
+            next.delete(taskId);
+            set({ lastSpokenTaskStatus: next });
           }
           get().fetchTasks();
         }
@@ -367,5 +410,38 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  // ─── TTS Actions ───
+
+  initTTSSettings: async () => {
+    try {
+      const settings = await TTSService.init();
+      set({ ttsEnabled: settings.enabled });
+    } catch {
+      // Defaults are fine
+    }
+  },
+
+  toggleTTS: async () => {
+    const next = !get().ttsEnabled;
+    set({ ttsEnabled: next });
+    await TTSService.saveSettings({ enabled: next });
+    if (!next) {
+      TTSService.stop();
+      set({ isSpeaking: false });
+    }
+  },
+
+  speakResponse: async (text: string) => {
+    if (!get().ttsEnabled) return;
+    try {
+      set({ isSpeaking: true });
+      await TTSService.speakConcise(text);
+    } catch (err) {
+      console.warn('[useAppStore] speakResponse error:', err);
+    } finally {
+      set({ isSpeaking: false });
+    }
+  },
 }));
 
