@@ -193,27 +193,38 @@ export const SwarmPipelineView: React.FC<SwarmPipelineViewProps> = ({ subtasks }
                     {isExpanded && st.plan && st.plan.length > 0 && (
                       <View style={styles.expandedSteps}>
                         <Text style={styles.expandedStepsTitle}>Worker Execution Steps:</Text>
-                        {st.plan.map((step, idx) => (
-                          <View key={step.id || idx} style={styles.stepRow}>
-                            <Text style={styles.stepNumber}>#{idx + 1}</Text>
-                            <Text style={styles.stepDesc}>{step.description}</Text>
-                            <Text
-                              style={[
-                                styles.stepStatus,
-                                {
-                                  color:
-                                    step.status === 'completed'
-                                      ? '#10b981'
-                                      : step.status === 'failed'
-                                      ? '#ef4444'
-                                      : '#f59e0b',
-                                },
-                              ]}
-                            >
-                              {step.status}
-                            </Text>
-                          </View>
-                        ))}
+                        {st.plan.map((step, idx) => {
+                          const isSimulated =
+                            step.result &&
+                            typeof step.result === 'object' &&
+                            (step.result as any).simulated === true;
+                          return (
+                            <View key={step.id || idx} style={styles.stepRow}>
+                              <Text style={styles.stepNumber}>#{idx + 1}</Text>
+                              <Text style={styles.stepDesc}>{step.description}</Text>
+                              {isSimulated && (
+                                <View style={styles.simulatedBadge}>
+                                  <Text style={styles.simulatedBadgeText}>SIMULATED</Text>
+                                </View>
+                              )}
+                              <Text
+                                style={[
+                                  styles.stepStatus,
+                                  {
+                                    color:
+                                      step.status === 'completed'
+                                        ? '#10b981'
+                                        : step.status === 'failed'
+                                        ? '#ef4444'
+                                        : '#f59e0b',
+                                  },
+                                ]}
+                              >
+                                {step.status}
+                              </Text>
+                            </View>
+                          );
+                        })}
                       </View>
                     )}
 
@@ -425,6 +436,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     textTransform: 'uppercase',
+  },
+  simulatedBadge: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+  },
+  simulatedBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#f59e0b',
   },
   expandToggleRow: {
     flexDirection: 'row',

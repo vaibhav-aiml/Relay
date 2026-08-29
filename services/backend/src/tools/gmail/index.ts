@@ -154,47 +154,54 @@ export const gmailDraftMessageTool: ToolDefinition<GmailDraftMessageInput> = {
     const connection = await ctx.db.getConnection(ctx.userId, 'google');
 
     if (connection && process.env.GOOGLE_CLIENT_ID) {
-      const auth = GoogleOAuthService.createOAuthClient();
-      const tokens = GoogleOAuthService.decryptTokens(connection.encryptedCredentialRef);
-      auth.setCredentials(tokens);
-      const gmail = google.gmail({ version: 'v1', auth });
+      try {
+        const auth = GoogleOAuthService.createOAuthClient();
+        const tokens = GoogleOAuthService.decryptTokens(connection.encryptedCredentialRef);
+        auth.setCredentials(tokens);
+        const gmail = google.gmail({ version: 'v1', auth });
 
-      const rawEmail = [
-        `To: ${input.to.join(', ')}`,
-        input.cc && input.cc.length > 0 ? `Cc: ${input.cc.join(', ')}` : '',
-        `Subject: ${input.subject}`,
-        '',
-        input.body,
-      ]
-        .filter(Boolean)
-        .join('\r\n');
+        const rawEmail = [
+          `To: ${input.to.join(', ')}`,
+          input.cc && input.cc.length > 0 ? `Cc: ${input.cc.join(', ')}` : '',
+          `Subject: ${input.subject}`,
+          '',
+          input.body,
+        ]
+          .filter(Boolean)
+          .join('\r\n');
 
-      const encoded = Buffer.from(rawEmail).toString('base64url');
+        const encoded = Buffer.from(rawEmail).toString('base64url');
 
-      const res = await gmail.users.drafts.create({
-        userId: 'me',
-        requestBody: {
-          message: {
-            raw: encoded,
-            threadId: input.threadId,
+        const res = await gmail.users.drafts.create({
+          userId: 'me',
+          requestBody: {
+            message: {
+              raw: encoded,
+              threadId: input.threadId,
+            },
           },
-        },
-      });
+        });
 
-      return {
-        draftId: res.data.id,
-        status: 'draft_created',
-        to: input.to,
-        subject: input.subject,
-      };
+        return {
+          draftId: res.data.id,
+          status: 'draft_created',
+          simulated: false,
+          to: input.to,
+          subject: input.subject,
+        };
+      } catch (googleErr: any) {
+        console.warn(`[Gmail] Real Google draft error (${googleErr.message}), falling back to mock draft simulation`);
+      }
     }
 
     const draftId = `draft-${Date.now()}`;
     return {
       draftId,
       status: 'draft_created',
+      simulated: true,
       to: input.to,
       subject: input.subject,
+      note: 'Simulated draft (Google account not connected in Settings -> Connections or GOOGLE_CLIENT_ID missing in backend environment)',
     };
   },
   verify: async (output) => {
@@ -244,6 +251,7 @@ export const gmailSendMessageTool: ToolDefinition<GmailSendMessageInput> = {
           messageId: res.data.id,
           threadId: res.data.threadId,
           status: 'sent',
+          simulated: false,
           to: input.to,
           subject: input.subject,
         };
@@ -258,8 +266,10 @@ export const gmailSendMessageTool: ToolDefinition<GmailSendMessageInput> = {
     return {
       messageId: sentId,
       status: 'sent',
+      simulated: true,
       to: input.to,
       subject: input.subject,
+      note: 'Simulated dispatch (Google account not connected in Settings -> Connections or GOOGLE_CLIENT_ID missing in backend environment)',
     };
   },
   verify: async (output, ctx) => {

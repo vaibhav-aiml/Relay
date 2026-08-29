@@ -166,6 +166,7 @@ export const calendarCreateEventTool: ToolDefinition<CalendarCreateEventInput> =
         id: res.data.id,
         summary: res.data.summary,
         status: res.data.status,
+        simulated: false,
         htmlLink: res.data.htmlLink,
         start: res.data.start?.dateTime,
         end: res.data.end?.dateTime,
@@ -189,8 +190,10 @@ export const calendarCreateEventTool: ToolDefinition<CalendarCreateEventInput> =
       id: mockId,
       summary: input.summary,
       status: 'confirmed',
+      simulated: true,
       start: input.startTime,
       end: input.endTime,
+      note: 'Simulated calendar event (Google account not connected in Settings -> Connections or GOOGLE_CLIENT_ID missing in backend environment)',
     };
   },
   verify: async (output, ctx) => {
