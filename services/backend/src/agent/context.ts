@@ -99,6 +99,13 @@ When planning:
     });
   }
 
+  public addUserMessage(content: string): void {
+    this.messages.push({
+      role: 'user',
+      content,
+    });
+  }
+
   public addToolResult(toolCallId: string, toolName: string, output: unknown): void {
     const wrappedOutput = PromptInjectionGuard.wrapToolOutput(toolName, output);
     this.messages.push({

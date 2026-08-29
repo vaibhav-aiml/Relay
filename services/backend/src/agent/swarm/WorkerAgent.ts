@@ -103,7 +103,7 @@ export class WorkerAgent {
           // Verify tool is within scoped whitelist
           if (!archetype.allowedTools.includes(toolCall.name)) {
             currentSubtask.status = 'failed';
-            currentSubtask.error = `Tool '${toolCall.name}' is outside the authorized scope for ${archetype.displayName}`;
+            currentSubtask.error = this.formatUnauthorizedToolError(archetype, toolCall.name);
             await this.logWorkerFailure(parentTaskId, currentSubtask, db);
             return currentSubtask;
           }
@@ -241,8 +241,22 @@ export class WorkerAgent {
           context.addToolResult(toolCall.id, toolDef.name, executionResult.output);
         }
       } else if (plan.type === 'final_answer') {
+        // Sanity-check final answer: reject degenerate echo (e.g. "Invoked tool web.open(...)") and steer worker to synthesize
+        if (
+          this.isDegenerateFinalAnswer(plan.text) &&
+          currentSubtask.plan.length > 0 &&
+          iterations < AGENT_CONFIG.MAX_WORKER_ITERATIONS
+        ) {
+          context.addUserMessage(
+            'CRITICAL: Please provide the actual substantive findings and summary extracted from the tool outputs above. Do NOT describe your tool actions or say "Invoked tool ...". Summarize the actual retrieved content clearly.'
+          );
+          continue;
+        }
+
         currentSubtask.status = 'completed';
-        currentSubtask.result = plan.text || 'Subtask successfully completed.';
+        currentSubtask.result = this.isDegenerateFinalAnswer(plan.text) && currentSubtask.plan.length > 0
+          ? this.extractFallbackDeliverable(currentSubtask.plan)
+          : plan.text || 'Subtask successfully completed.';
         currentSubtask.completedAt = new Date().toISOString();
 
         await db.logEvent({
@@ -314,6 +328,46 @@ ${userMemoriesStr}${upstreamBlock}`;
     }
 
     return context;
+  }
+
+  private static isDegenerateFinalAnswer(text?: string): boolean {
+    if (!text || text.trim().length === 0) return true;
+    const trimmed = text.trim();
+    // Meta-action descriptions like "Invoked tool web.open({"url":...})"
+    if (/^(invoked|executed|calling|ran|used)\s+tool\s+/i.test(trimmed)) return true;
+    // Raw JSON tool-call echo
+    if (/^(tool\s*call:?\s*)?\{.*"(url|query|to|subject|platform)":.*\}$/is.test(trimmed)) return true;
+    return false;
+  }
+
+  private static extractFallbackDeliverable(plan: PlanStep[]): string {
+    const completedSteps = plan.filter((s) => s.status === 'completed' && s.result);
+    if (completedSteps.length === 0) return 'Subtask successfully completed.';
+    const lastResult = completedSteps[completedSteps.length - 1].result;
+    if (typeof lastResult === 'string') return lastResult;
+    if (typeof lastResult === 'object') {
+      const obj = lastResult as Record<string, any>;
+      if (obj.content) return String(obj.content).slice(0, 500);
+      if (obj.snippet) return String(obj.snippet);
+      if (obj.results && Array.isArray(obj.results)) {
+        return obj.results.map((r: any) => r.title || r.snippet || JSON.stringify(r)).join('\n');
+      }
+      return JSON.stringify(lastResult).slice(0, 500);
+    }
+    return 'Subtask successfully completed.';
+  }
+
+  private static formatUnauthorizedToolError(
+    archetype: { type: string; displayName: string },
+    toolName: string
+  ): string {
+    if (
+      archetype.type === 'communicator' &&
+      (toolName.startsWith('web.') || toolName.startsWith('food.') || toolName.startsWith('calendar.'))
+    ) {
+      return `Communicator Agent attempted to use ${toolName} for missing details instead of composing with available upstream research.`;
+    }
+    return `Tool '${toolName}' is outside the authorized scope for ${archetype.displayName}`;
   }
 
   private static async logWorkerFailure(

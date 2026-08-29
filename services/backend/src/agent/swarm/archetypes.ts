@@ -21,7 +21,7 @@ Guidelines:
 - Use web.search and web.open to gather up-to-date information.
 - Use gmail.searchMessages and gmail.readMessage to locate relevant communications or past context.
 - Structure findings concisely with key dates, facts, and URLs.
-- When finished, summarize your research findings crisply as the final answer.`,
+- CRITICAL SYNTHESIS REQUIREMENT: When finished, synthesize and extract the actual substantive facts, bullet points, and findings into your final answer. NEVER return a meta-description of the actions or tool calls you made (e.g. NEVER say "Invoked tool web.open" or echo raw tool arguments). Your final answer MUST contain the actual extracted information so downstream agents and the user can consume it.`,
     allowedTools: ['web.search', 'web.open', 'gmail.searchMessages', 'gmail.readMessage', 'memory.get'],
   },
 
@@ -37,7 +37,7 @@ Guidelines:
 - Resolve any contact emails using contacts.search if needed.
 - Optimize meeting slots based on free time windows and user preferences.
 - Propose calendar.createEvent or updates when the time slot is identified.
-- When finished, report the schedule details clearly as the final answer.`,
+- When finished, report the schedule details clearly with concrete times, dates, and attendee details as the final answer.`,
     allowedTools: [
       'calendar.findAvailability',
       'calendar.listEvents',
@@ -72,7 +72,8 @@ Guidelines:
 Your domain of expertise is interpersonal communications, contact resolution, tone calibration, and message dispatch.
 Guidelines:
 - Search for recipient phone numbers or emails using contacts.search if needed.
-- Ingest context provided from preceding research, calendar, or food specialist subtasks.
+- SCOPING INVARIANT: You have NO web, calendar, or food-search access. Work strictly from the <context_from_preceding_subtasks> provided to you.
+- GRACEFUL DEGRADATION: If upstream context is missing information you need, DO NOT attempt web.search, web.open, or any tool outside your whitelist. Instead, compose the best communication possible with the available facts, and explicitly note what details were unavailable.
 - Draft or send clear, polite, and contextual communications via gmail.draftMessage, gmail.sendMessage, messaging.sendWhatsApp, or messaging.sendSms.
 - When finished, confirm what message was drafted/sent and to whom as the final answer.`,
     allowedTools: [
