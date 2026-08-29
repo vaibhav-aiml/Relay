@@ -74,6 +74,7 @@ describe('AgentOrchestrator Push Notification Triggers', () => {
       status: 'CREATED',
       plan: [],
       currentStep: 0,
+      pendingApprovals: [],
       iterations: 0,
       source: 'manual',
       createdAt: new Date().toISOString(),
@@ -83,14 +84,14 @@ describe('AgentOrchestrator Push Notification Triggers', () => {
     const finalTask = await orchestrator.runTask(task, testUser, new HighRiskPlanner(testUser));
 
     expect(finalTask.status).toBe('WAITING_APPROVAL');
-    expect(finalTask.pendingApproval).toBeDefined();
+    expect(finalTask.pendingApprovals.length).toBe(1);
 
     // Verify push notification was dispatched
     expect(fetchRequests.length).toBe(1);
     expect(fetchRequests[0].body.to).toBe('ExponentPushToken[device-test-orchestrator]');
     expect(fetchRequests[0].body.categoryId).toBe('APPROVAL_ACTIONS');
     expect(fetchRequests[0].body.channelId).toBe('relay-approvals');
-    expect(fetchRequests[0].body.data.approvalId).toBe(finalTask.pendingApproval?.id);
+    expect(fetchRequests[0].body.data.approvalId).toBe(finalTask.pendingApprovals[0]?.id);
   });
 
   it('triggers task completion push alert when scheduled routine completes', async () => {
@@ -110,6 +111,7 @@ describe('AgentOrchestrator Push Notification Triggers', () => {
       status: 'CREATED',
       plan: [],
       currentStep: 0,
+      pendingApprovals: [],
       iterations: 0,
       source: 'scheduled',
       routineId: 'routine-morning-1',
@@ -144,6 +146,7 @@ describe('AgentOrchestrator Push Notification Triggers', () => {
       status: 'CREATED',
       plan: [],
       currentStep: 0,
+      pendingApprovals: [],
       iterations: 0,
       source: 'manual',
       createdAt: new Date().toISOString(),

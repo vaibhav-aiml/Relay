@@ -90,6 +90,7 @@ describe('Rahul Meeting E2E Scenario Test', () => {
       status: 'CREATED',
       plan: [],
       currentStep: 0,
+      pendingApprovals: [],
       iterations: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -101,9 +102,9 @@ describe('Rahul Meeting E2E Scenario Test', () => {
     const pausedTask = await orchestrator.runTask(task, mockUser, customPlanner);
 
     expect(pausedTask.status).toBe('WAITING_APPROVAL');
-    expect(pausedTask.pendingApproval).toBeDefined();
-    expect(pausedTask.pendingApproval?.action).toBe('calendar.createEvent');
-    expect(pausedTask.pendingApproval?.args.attendees).toContain('rahul@example.com');
+    expect(pausedTask.pendingApprovals.length).toBe(1);
+    expect(pausedTask.pendingApprovals[0].action).toBe('calendar.createEvent');
+    expect(pausedTask.pendingApprovals[0].args.attendees).toContain('rahul@example.com');
 
     // Verify events logged up to this point
     const eventsBeforeApproval = await db.getTaskEvents(task.id);
@@ -112,7 +113,7 @@ describe('Rahul Meeting E2E Scenario Test', () => {
     // User approves via Approval Card UI
     const completedTask = await orchestrator.resumeWithApproval(
       pausedTask.id,
-      pausedTask.pendingApproval!.id,
+      pausedTask.pendingApprovals[0].id,
       'approved',
       mockUser,
       customPlanner

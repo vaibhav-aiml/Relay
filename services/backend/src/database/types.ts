@@ -27,6 +27,7 @@ export interface IDatabaseRepository {
   createApproval(approval: Omit<Approval, 'id' | 'requestedAt'>): Promise<Approval>;
   getApproval(approvalId: string): Promise<Approval | null>;
   getPendingApprovalForTask(taskId: string): Promise<Approval | null>;
+  getPendingApprovalsForTask(taskId: string): Promise<Approval[]>;
   resolveApproval(approvalId: string, decision: 'approved' | 'denied', reason?: string): Promise<Approval>;
 
   // Memories

@@ -52,6 +52,30 @@ export class ToolRegistry {
   }
 
   /**
+   * Formats a scoped subset of registered tools for specialized worker agents.
+   */
+  public getScopedSchemas(allowedToolNames: string[]): Array<{
+    type: 'function';
+    function: {
+      name: string;
+      description: string;
+      parameters: Record<string, unknown>;
+    };
+  }> {
+    const allowedSet = new Set(allowedToolNames);
+    return this.list()
+      .filter((tool) => allowedSet.has(tool.name))
+      .map((tool) => ({
+        type: 'function',
+        function: {
+          name: tool.name,
+          description: `[Risk: ${tool.riskLevel}] ${tool.description}`,
+          parameters: zodToJsonSchemaShim(tool.inputSchema),
+        },
+      }));
+  }
+
+  /**
    * Executes a tool with Zod schema validation, timeout, retry policy, and post-verification.
    */
   public async executeWithGuards<TInput = any, TOutput = any>(

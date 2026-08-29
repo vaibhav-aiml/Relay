@@ -65,6 +65,7 @@ describe('AgentOrchestrator Autonomous Routines & Auto-Approval Whitelist', () =
       status: 'CREATED',
       plan: [],
       currentStep: 0,
+      pendingApprovals: [],
       iterations: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -105,6 +106,7 @@ describe('AgentOrchestrator Autonomous Routines & Auto-Approval Whitelist', () =
       status: 'CREATED',
       plan: [],
       currentStep: 0,
+      pendingApprovals: [],
       iterations: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -119,6 +121,6 @@ describe('AgentOrchestrator Autonomous Routines & Auto-Approval Whitelist', () =
 
     // Must pause at WAITING_APPROVAL for user safety
     expect(result.status).toBe('WAITING_APPROVAL');
-    expect(result.pendingApproval).toBeDefined();
+    expect(result.pendingApprovals.length).toBe(1);
   });
 });

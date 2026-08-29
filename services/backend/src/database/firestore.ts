@@ -242,13 +242,20 @@ export class FirestoreRepository implements IDatabaseRepository {
   }
 
   async getPendingApprovalForTask(taskId: string): Promise<Approval | null> {
-    const snap = await this.db.collection('approvals').where('taskId', '==', taskId).limit(1).get();
-    if (snap.empty) return null;
-    const doc = snap.docs[0];
-    const data = doc.data() as Approval;
-    if (data.decision) return null;
-    const { id, ...rest } = data;
-    return { id: doc.id, ...rest };
+    const list = await this.getPendingApprovalsForTask(taskId);
+    return list.length > 0 ? list[0] : null;
+  }
+
+  async getPendingApprovalsForTask(taskId: string): Promise<Approval[]> {
+    const snap = await this.db.collection('approvals').where('taskId', '==', taskId).get();
+    const approvals: Approval[] = [];
+    snap.docs.forEach((doc) => {
+      const { id: _ignoredId, ...data } = doc.data() as Approval;
+      if (!data.decision) {
+        approvals.push({ id: doc.id, ...data });
+      }
+    });
+    return approvals;
   }
 
   async resolveApproval(approvalId: string, decision: 'approved' | 'denied', reason?: string): Promise<Approval> {

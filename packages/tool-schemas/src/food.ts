@@ -18,8 +18,8 @@ export const foodPrepareOrderSchema = z.object({
   currency: z.string().default('INR').describe('Currency code (default INR / ₹)'),
   budgetRange: z.string().optional().describe('Original user requested budget constraint (e.g. Under ₹150, ₹100–₹200)'),
   platform: z.enum(['zomato', 'swiggy', 'blinkit', 'zepto']).describe('Target food delivery platform'),
-  deepLinkUrl: z.string().describe('Android native deep link intent URL (e.g. zomato://search?q=cold+coffee or swiggy://explore?query=cold+coffee)'),
-  webFallbackUrl: z.string().describe('Web fallback URL if native app is not installed (e.g. https://www.zomato.com/search?q=cold+coffee)'),
+  deepLinkUrl: z.string().optional().describe('Android native deep link intent URL (e.g. zomato://search?q=cold+coffee or swiggy://explore?query=cold+coffee)'),
+  webFallbackUrl: z.string().optional().describe('Web fallback URL if native app is not installed (e.g. https://www.zomato.com/search?q=cold+coffee)'),
   idempotencyKey: z.string().optional().describe('Unique idempotency key'),
 });
 

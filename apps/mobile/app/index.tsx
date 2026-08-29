@@ -17,6 +17,7 @@ import { Header } from '../components/Header';
 import { VoiceButton } from '../components/VoiceButton';
 import { TaskStatusLive } from '../components/TaskStatusLive';
 import { ApprovalCard } from '../components/ApprovalCard';
+import { ApprovalCardQueue } from '../components/ApprovalCardQueue';
 import { TaskCard } from '../components/TaskCard';
 import { VoiceMode } from '../components/VoiceMode';
 import { useAppStore } from '../store/useAppStore';
@@ -98,9 +99,9 @@ export default function HomeScreen() {
               <TaskStatusLive task={currentTask} onCancel={cancelCurrentTask} />
             </TouchableOpacity>
 
-            {currentTask.pendingApproval && (
-              <ApprovalCard
-                approval={currentTask.pendingApproval}
+            {currentTask.pendingApprovals && currentTask.pendingApprovals.length > 0 && (
+              <ApprovalCardQueue
+                approvals={currentTask.pendingApprovals}
                 onApprove={(id) => submitApproval(id, 'approved')}
                 onDeny={(id) => submitApproval(id, 'denied')}
                 isLoading={isLoading}

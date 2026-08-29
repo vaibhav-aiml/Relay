@@ -1,4 +1,4 @@
-import { Task, User, PlanStep } from '@relay/shared-types';
+import { Task, User, PlanStep, Approval } from '@relay/shared-types';
 import { AGENT_CONFIG } from '@relay/config';
 import { IDatabaseRepository } from '../database/types.js';
 import { ToolRegistry } from '../tools/registry.js';
@@ -6,21 +6,80 @@ import { PolicyEngine } from '../permissions/policy.js';
 import { Planner } from './planner.js';
 import { AgentContext } from './context.js';
 import { dispatchApprovalAlert, dispatchTaskCompletionAlert, dispatchTaskFailureAlert } from '../scheduler/notifications.js';
+import { TaskExecutionMutex } from './swarm/TaskExecutionMutex.js';
+import { GoalDecomposer } from './swarm/GoalDecomposer.js';
+import { SwarmPipelineExecutor } from './swarm/SwarmPipelineExecutor.js';
 
 export class AgentOrchestrator {
   private db: IDatabaseRepository;
   private registry: ToolRegistry;
+  private swarmExecutor: SwarmPipelineExecutor;
+  private mutex: TaskExecutionMutex;
 
   constructor(db: IDatabaseRepository) {
     this.db = db;
     this.registry = ToolRegistry.getInstance();
+    this.swarmExecutor = new SwarmPipelineExecutor(db);
+    this.mutex = TaskExecutionMutex.getInstance();
   }
 
   /**
-   * Main Agent Execution Loop with state machine transitions and safety guardrails.
+   * Main Agent Execution Loop with state machine transitions, safety guardrails, and swarm routing.
+   * Serialized via TaskExecutionMutex per taskId.
    */
   public async runTask(task: Task, user: User, customPlanner?: Planner): Promise<Task> {
+    return this.mutex.runExclusive(task.id, async () => {
+      // Reload fresh state if already in database
+      const existing = await this.db.getTask(user.id, task.id);
+      const activeTask = existing || task;
+      return this.runTaskInternal(activeTask, user, customPlanner);
+    });
+  }
+
+  private async runTaskInternal(task: Task, user: User, customPlanner?: Planner): Promise<Task> {
     const planner = customPlanner || new Planner(user);
+
+    // Initialize pendingApprovals array if needed
+    if (!task.pendingApprovals) {
+      task.pendingApprovals = [];
+    }
+
+    // 1. If task is already marked as a swarm or needs decomposition check
+    if (task.isSwarm && task.subtasks && task.subtasks.length > 0) {
+      return this.swarmExecutor.executeSwarm(task, user, planner);
+    }
+
+    // Check if new task should be decomposed into a multi-agent swarm
+    if (task.status === 'CREATED' && !task.isSwarm && !task.coordinatorPlan) {
+      const decomposition = await GoalDecomposer.decompose(task.goal, user, planner);
+
+      if (decomposition.isDecomposed && decomposition.subtasks.length > 1) {
+        task.isSwarm = true;
+        task.coordinatorPlan = decomposition;
+        task.subtasks = decomposition.subtasks.map((st) => ({
+          ...st,
+          parentTaskId: task.id,
+        }));
+
+        await this.db.saveTask(task);
+
+        for (const st of task.subtasks) {
+          await this.db.logEvent({
+            taskId: task.id,
+            subAgentId: st.id,
+            subAgentType: st.agentType,
+            type: 'subagent_spawned',
+            status: 'started',
+            message: `Spawned worker agent [${st.agentType}]: "${st.name}"`,
+            safeMetadata: { subTaskId: st.id, stage: st.stage, archetype: st.agentType },
+          });
+        }
+
+        return this.swarmExecutor.executeSwarm(task, user, planner);
+      }
+    }
+
+    // 2. Standard Single-Agent Execution Loop
     const memories = await this.db.getMemories(user.id);
     const context = new AgentContext(task, user, memories);
 
@@ -39,7 +98,7 @@ export class AgentOrchestrator {
     const terminalStatuses = ['COMPLETED', 'FAILED', 'CANCELLED', 'WAITING_APPROVAL'];
 
     while (!terminalStatuses.includes(currentTask.status)) {
-      // 1. Guardrail checks: Max Iterations & Max Duration
+      // Guardrail checks: Max Iterations & Max Duration
       if (currentTask.iterations >= AGENT_CONFIG.MAX_ITERATIONS) {
         currentTask.status = 'FAILED';
         currentTask.error = `Agent exceeded maximum allowed iterations (${AGENT_CONFIG.MAX_ITERATIONS})`;
@@ -59,7 +118,7 @@ export class AgentOrchestrator {
       currentTask.status = 'EXECUTING';
       await this.db.saveTask(currentTask);
 
-      // 2. Planner LLM Call
+      // Planner LLM Call
       let plan;
       try {
         plan = await planner.getNextStep(context.getMessages());
@@ -70,7 +129,7 @@ export class AgentOrchestrator {
         return currentTask;
       }
 
-      // 3. Handle Tool Call
+      // Handle Tool Call
       if (plan.type === 'tool_call' && plan.toolCalls && plan.toolCalls.length > 0) {
         context.addAssistantToolCalls(plan.text, plan.toolCalls);
 
@@ -83,7 +142,6 @@ export class AgentOrchestrator {
             return currentTask;
           }
 
-          // Add to task plan steps
           const stepNumber = currentTask.plan.length + 1;
           const planStep: PlanStep = {
             id: toolCall.id,
@@ -97,7 +155,7 @@ export class AgentOrchestrator {
           currentTask.currentStep = stepNumber;
           await this.db.saveTask(currentTask);
 
-          // 4. Deterministic Permission & Risk Evaluation
+          // Deterministic Permission & Risk Evaluation
           const policy = PolicyEngine.evaluate(toolDef.requiredPermission, user);
 
           if (policy.decision === 'BLOCKED') {
@@ -116,7 +174,7 @@ export class AgentOrchestrator {
             return currentTask;
           }
 
-          // Check auto-approval whitelist for autonomous routines (bypasses pause ONLY for whitelisted tools)
+          // Check auto-approval whitelist for autonomous routines
           const isPreApproved =
             Boolean(currentTask.autoApproveRoutine) &&
             Array.isArray(currentTask.preApprovedTools) &&
@@ -131,9 +189,7 @@ export class AgentOrchestrator {
               message: `Auto-approved "${toolCall.name}" via routine pre-approved permissions whitelist`,
               safeMetadata: { autoApproved: true, tool: toolCall.name },
             });
-            // Fall through to execution directly!
           } else if (policy.decision === 'NEEDS_CONFIRMATION') {
-            // Create pending Approval record
             const description = PolicyEngine.formatApprovalDescription(toolCall.name, toolCall.args);
             const approval = await this.db.createApproval({
               userId: user.id,
@@ -146,7 +202,7 @@ export class AgentOrchestrator {
             });
 
             planStep.status = 'needs_approval';
-            currentTask.pendingApproval = approval;
+            currentTask.pendingApprovals = [approval];
             currentTask.status = 'WAITING_APPROVAL';
 
             await this.db.logEvent({
@@ -158,7 +214,6 @@ export class AgentOrchestrator {
               safeMetadata: { approvalId: approval.id, riskLevel: policy.riskLevel },
             });
 
-            // Centralized fire-and-forget push alert for all task sources
             if (user.profile?.pushToken) {
               dispatchApprovalAlert(this.db, user, currentTask, approval).catch((err) => {
                 console.warn(`[AgentOrchestrator] Non-blocking push notification failed: ${err.message}`);
@@ -166,11 +221,10 @@ export class AgentOrchestrator {
             }
 
             await this.db.saveTask(currentTask);
-            return currentTask; // Pause loop until user approval
+            return currentTask;
           }
 
-
-          // 5. Execute Tool with Guards
+          // Execute Tool with Guards
           await this.db.logEvent({
             taskId: currentTask.id,
             type: 'tool_call',
@@ -215,11 +269,9 @@ export class AgentOrchestrator {
             safeMetadata: { verified: executionResult.verified },
           });
 
-          // 6. Wrap Tool Output into context
           context.addToolResult(toolCall.id, toolDef.name, executionResult.output);
         }
       } else if (plan.type === 'final_answer') {
-        // 7. Verifying and Finalizing
         currentTask.status = 'VERIFYING';
         await this.db.saveTask(currentTask);
 
@@ -237,6 +289,7 @@ export class AgentOrchestrator {
 
   /**
    * Resumes a paused task following a user's approval decision.
+   * Serialized via TaskExecutionMutex per taskId.
    */
   public async resumeWithApproval(
     taskId: string,
@@ -245,89 +298,96 @@ export class AgentOrchestrator {
     user: User,
     customPlanner?: Planner
   ): Promise<Task> {
-    const task = await this.db.getTask(user.id, taskId);
-    if (!task) throw new Error(`Task ${taskId} not found`);
-    if (task.status !== 'WAITING_APPROVAL') throw new Error(`Task is not waiting for approval (current: ${task.status})`);
+    return this.mutex.runExclusive(taskId, async () => {
+      // Reload freshly persisted state
+      const task = await this.db.getTask(user.id, taskId);
+      if (!task) throw new Error(`Task ${taskId} not found`);
+      if (task.status !== 'WAITING_APPROVAL') throw new Error(`Task is not waiting for approval (current: ${task.status})`);
 
-    const approval = await this.db.resolveApproval(approvalId, decision);
-    task.pendingApproval = undefined;
-
-    await this.db.logEvent({
-      taskId: task.id,
-      type: 'approval_decision',
-      status: decision === 'approved' ? 'succeeded' : 'failed',
-      message: `User ${decision} action "${approval.description}"`,
-      safeMetadata: { approvalId, decision },
-    });
-
-    if (decision === 'denied') {
-      task.status = 'CANCELLED';
-      task.error = `Action denied by user: ${approval.description}`;
-      await this.finalizeTask(task, user);
-      return task;
-    }
-
-    // Execute the approved tool call
-    const toolDef = this.registry.get(approval.toolName);
-    if (!toolDef) {
-      task.status = 'FAILED';
-      task.error = `Approved tool ${approval.toolName} not found`;
-      await this.finalizeTask(task, user);
-      return task;
-    }
-
-    const executionResult = await this.registry.executeWithGuards(approval.toolName, approval.args, {
-      userId: user.id,
-      taskId: task.id,
-      db: this.db,
-    });
-
-    if (!executionResult.success) {
-      task.status = 'FAILED';
-      task.error = executionResult.error;
-      await this.finalizeTask(task, user);
-      return task;
-    }
-
-    // Update the pending step in plan
-    const step = task.plan.find((s) => s.toolName === approval.toolName && s.status === 'needs_approval');
-    if (step) {
-      step.status = 'completed';
-      step.result = executionResult.output;
-      step.verified = executionResult.verified;
-    }
-
-    // Auto-save food preference to memory for repeat "order my usual" queries
-    if (approval.toolName === 'food.prepareOrder' && approval.args) {
-      try {
-        const item = String(approval.args.itemName || 'Food Item');
-        const rest = String(approval.args.restaurantName || 'Restaurant');
-        const plat = String(approval.args.platform || 'delivery app');
-        const price = approval.args.estimatedPrice ? `~₹${approval.args.estimatedPrice}` : '';
-        const isCoffee = item.toLowerCase().includes('coffee');
-        const memKey = isCoffee ? 'usual_coffee' : `favorite_${item.toLowerCase().replace(/[^\w]/g, '_').slice(0, 20)}`;
-        await this.db.saveMemory({
-          userId: user.id,
-          key: memKey,
-          value: `${item} from ${rest} on ${plat.toUpperCase()} (${price})`,
-          category: 'preference',
-          source: 'inferred',
-          userApproved: true,
-        });
-      } catch (memErr) {
-        // Non-blocking memory update
+      // If this is a swarm task, delegate to SwarmPipelineExecutor
+      if (task.isSwarm && task.subtasks && task.subtasks.length > 0) {
+        return this.swarmExecutor.resumeSwarmApproval(task, approvalId, decision, user, customPlanner);
       }
-    }
 
-    task.status = 'EXECUTING';
-    await this.db.saveTask(task);
+      // Single-Agent resume path
+      const approval = await this.db.resolveApproval(approvalId, decision);
+      task.pendingApprovals = (task.pendingApprovals || []).filter((a) => a.id !== approvalId);
 
-    // Continue the agent loop
-    return this.runTask(task, user, customPlanner);
+      await this.db.logEvent({
+        taskId: task.id,
+        type: 'approval_decision',
+        status: decision === 'approved' ? 'succeeded' : 'failed',
+        message: `User ${decision} action "${approval.description}"`,
+        safeMetadata: { approvalId, decision },
+      });
+
+      if (decision === 'denied') {
+        task.status = 'CANCELLED';
+        task.error = `Action denied by user: ${approval.description}`;
+        await this.finalizeTask(task, user);
+        return task;
+      }
+
+      const toolDef = this.registry.get(approval.toolName);
+      if (!toolDef) {
+        task.status = 'FAILED';
+        task.error = `Approved tool ${approval.toolName} not found`;
+        await this.finalizeTask(task, user);
+        return task;
+      }
+
+      const executionResult = await this.registry.executeWithGuards(approval.toolName, approval.args, {
+        userId: user.id,
+        taskId: task.id,
+        db: this.db,
+      });
+
+      if (!executionResult.success) {
+        task.status = 'FAILED';
+        task.error = executionResult.error;
+        await this.finalizeTask(task, user);
+        return task;
+      }
+
+      const step = task.plan.find((s) => s.toolName === approval.toolName && s.status === 'needs_approval');
+      if (step) {
+        step.status = 'completed';
+        step.result = executionResult.output;
+        step.verified = executionResult.verified;
+      }
+
+      // Auto-save food preference
+      if (approval.toolName === 'food.prepareOrder' && approval.args) {
+        try {
+          const item = String(approval.args.itemName || 'Food Item');
+          const rest = String(approval.args.restaurantName || 'Restaurant');
+          const plat = String(approval.args.platform || 'delivery app');
+          const price = approval.args.estimatedPrice ? `~₹${approval.args.estimatedPrice}` : '';
+          const isCoffee = item.toLowerCase().includes('coffee');
+          const memKey = isCoffee ? 'usual_coffee' : `favorite_${item.toLowerCase().replace(/[^\w]/g, '_').slice(0, 20)}`;
+          await this.db.saveMemory({
+            userId: user.id,
+            key: memKey,
+            value: `${item} from ${rest} on ${plat.toUpperCase()} (${price})`,
+            category: 'preference',
+            source: 'inferred',
+            userApproved: true,
+          });
+        } catch {
+          // Non-blocking
+        }
+      }
+
+      task.status = 'EXECUTING';
+      await this.db.saveTask(task);
+
+      return this.runTaskInternal(task, user, customPlanner);
+    });
   }
 
   /**
-   * Resumes a completed task that asked a follow-up question, incorporating user feedback.
+   * Resumes a completed task that asked a follow-up question.
+   * Serialized via TaskExecutionMutex per taskId.
    */
   public async continueTaskWithReply(
     taskId: string,
@@ -335,43 +395,43 @@ export class AgentOrchestrator {
     user: User,
     customPlanner?: Planner
   ): Promise<Task> {
-    const task = await this.db.getTask(user.id, taskId);
-    if (!task) throw new Error(`Task ${taskId} not found`);
+    return this.mutex.runExclusive(taskId, async () => {
+      const task = await this.db.getTask(user.id, taskId);
+      if (!task) throw new Error(`Task ${taskId} not found`);
 
-    const now = new Date().toISOString();
-    const history = task.followUpHistory || [];
+      const now = new Date().toISOString();
+      const history = task.followUpHistory || [];
 
-    // If there was a previous final answer, record it in conversation history
-    if (task.finalAnswer) {
+      if (task.finalAnswer) {
+        history.push({
+          role: 'assistant',
+          content: task.finalAnswer,
+          timestamp: task.completedAt || now,
+        });
+      }
+
       history.push({
-        role: 'assistant',
-        content: task.finalAnswer,
-        timestamp: task.completedAt || now,
+        role: 'user',
+        content: reply.trim(),
+        timestamp: now,
       });
-    }
 
-    // Record the user's clarification / reply
-    history.push({
-      role: 'user',
-      content: reply.trim(),
-      timestamp: now,
+      task.followUpHistory = history;
+      task.finalAnswer = undefined;
+      task.status = 'PLANNING';
+      task.updatedAt = now;
+
+      await this.db.saveTask(task);
+      await this.db.logEvent({
+        taskId: task.id,
+        type: 'status_change',
+        status: 'started',
+        message: `User replied to continue mission: "${reply.trim()}"`,
+        safeMetadata: { reply: reply.trim() },
+      });
+
+      return this.runTaskInternal(task, user, customPlanner);
     });
-
-    task.followUpHistory = history;
-    task.finalAnswer = undefined;
-    task.status = 'PLANNING';
-    task.updatedAt = now;
-
-    await this.db.saveTask(task);
-    await this.db.logEvent({
-      taskId: task.id,
-      type: 'status_change',
-      status: 'started',
-      message: `User replied to continue mission: "${reply.trim()}"`,
-      safeMetadata: { reply: reply.trim() },
-    });
-
-    return this.runTask(task, user, customPlanner);
   }
 
   private async finalizeTask(task: Task, user?: User): Promise<void> {
@@ -385,7 +445,6 @@ export class AgentOrchestrator {
       safeMetadata: { finalStatus: task.status },
     });
 
-    // Notify user on completion or failure for unattended scheduled routines
     if (task.source === 'scheduled' && user?.profile?.pushToken) {
       if (task.status === 'COMPLETED') {
         dispatchTaskCompletionAlert(this.db, user, task).catch((err) => {

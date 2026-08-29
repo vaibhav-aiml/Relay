@@ -4,6 +4,8 @@ export interface Approval {
   id: string;
   userId: string;
   taskId: string;
+  subTaskId?: string;
+  agentType?: string;
   toolName: string;
   action: string;
   description: string;
@@ -14,3 +16,4 @@ export interface Approval {
   decidedAt?: string;
   denialReason?: string;
 }
+

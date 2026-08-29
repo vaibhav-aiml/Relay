@@ -8,6 +8,15 @@ export const AGENT_CONFIG = {
   BACKOFF_BASE_MS: 1000,
   MAX_TASK_HISTORY_PER_USER: 50,
   DAILY_USER_TOKEN_LIMIT: 100_000,
+
+  // Swarm & Multi-Agent Orchestration Limits
+  MAX_SWARM_DEPTH: 1, // Depth = 1; workers cannot spawn child swarms
+  MAX_SUBAGENTS_PER_TASK: 6, // Hard budget ceiling on sub-agents per composite goal
+  MAX_SWARM_STAGES: 3, // Maximum stages in a swarm DAG
+  MAX_CONCURRENT_LLM_CALLS: 2, // Semaphore concurrency limit across swarm LLM calls
+  MAX_WORKER_ITERATIONS: 8, // Per-worker iteration cap
+  MAX_WORKER_DURATION_MS: 60_000, // 60s per-worker execution timeout
+  MAX_SWARM_WALL_CLOCK_MS: 300_000, // 5 minutes overall swarm execution cap
 } as const;
 
 export const CAPABILITY_RISK_MAP: Record<string, { riskLevel: RiskLevel; description: string; requiresConfirmation: boolean }> = {

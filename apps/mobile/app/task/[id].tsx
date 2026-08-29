@@ -16,6 +16,8 @@ import { ChevronLeft, RefreshCw, Send, Sparkles, CornerDownRight, Volume2 } from
 import { Header } from '../../components/Header';
 import { TaskStatusLive } from '../../components/TaskStatusLive';
 import { ApprovalCard } from '../../components/ApprovalCard';
+import { ApprovalCardQueue } from '../../components/ApprovalCardQueue';
+import { SwarmPipelineView } from '../../components/SwarmPipelineView';
 import { StepTrace } from '../../components/StepTrace';
 import { AudioVisualizer } from '../../components/AudioVisualizer';
 import { useAppStore } from '../../store/useAppStore';
@@ -122,10 +124,15 @@ export default function TaskDetailScreen() {
           {/* Status Live Banner */}
           <TaskStatusLive task={currentTask} onCancel={cancelCurrentTask} />
 
-          {/* Approval Card if waiting */}
-          {currentTask.pendingApproval && (
-            <ApprovalCard
-              approval={currentTask.pendingApproval}
+          {/* Multi-Agent Swarm Pipeline View if composite mission */}
+          {currentTask.isSwarm && currentTask.subtasks && currentTask.subtasks.length > 0 && (
+            <SwarmPipelineView subtasks={currentTask.subtasks} />
+          )}
+
+          {/* Concurrent Multi-Agent Approval Queue */}
+          {currentTask.pendingApprovals && currentTask.pendingApprovals.length > 0 && (
+            <ApprovalCardQueue
+              approvals={currentTask.pendingApprovals}
               onApprove={(apprId) => submitApproval(apprId, 'approved')}
               onDeny={(apprId) => submitApproval(apprId, 'denied')}
               isLoading={isLoading}

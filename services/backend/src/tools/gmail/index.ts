@@ -208,7 +208,7 @@ export const gmailSendMessageTool: ToolDefinition<GmailSendMessageInput> = {
   inputSchema: gmailSendMessageSchema,
   riskLevel: 'HIGH',
   requiredPermission: 'gmail.sendMessage',
-  idempotencyKeyFn: (input) => input.idempotencyKey,
+  idempotencyKeyFn: (input) => input.idempotencyKey || `gmail-send-${input.to?.[0] || 'unknown'}-${Date.now()}`,
   timeoutMs: 15_000,
   retryPolicy: { maxRetries: 2, backoffMs: 1500 },
   execute: async (input: GmailSendMessageInput, ctx: ExecutionContext) => {

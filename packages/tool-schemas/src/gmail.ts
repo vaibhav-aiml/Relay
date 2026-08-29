@@ -26,6 +26,6 @@ export const gmailSendMessageSchema = z.object({
   subject: z.string().min(1).describe('Email subject line'),
   body: z.string().min(1).describe('Email body text'),
   draftId: z.string().optional().describe('Optional draft ID if sending an existing prepared draft'),
-  idempotencyKey: z.string().min(8).describe('Unique client/task key to prevent duplicate sends'),
+  idempotencyKey: z.string().optional().describe('Unique client/task key to prevent duplicate sends'),
 });
 export type GmailSendMessageInput = z.infer<typeof gmailSendMessageSchema>;

@@ -45,6 +45,7 @@ describe('Agent Orchestrator Integration Tests', () => {
       status: 'CREATED',
       plan: [],
       currentStep: 0,
+      pendingApprovals: [],
       iterations: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -94,6 +95,7 @@ describe('Agent Orchestrator Integration Tests', () => {
       status: 'CREATED',
       plan: [],
       currentStep: 0,
+      pendingApprovals: [],
       iterations: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -105,14 +107,14 @@ describe('Agent Orchestrator Integration Tests', () => {
     const pausedTask = await orchestrator.runTask(task, mockUser, customPlanner);
 
     expect(pausedTask.status).toBe('WAITING_APPROVAL');
-    expect(pausedTask.pendingApproval).toBeDefined();
-    expect(pausedTask.pendingApproval?.toolName).toBe('calendar.createEvent');
-    expect(pausedTask.pendingApproval?.riskLevel).toBe('HIGH');
+    expect(pausedTask.pendingApprovals.length).toBe(1);
+    expect(pausedTask.pendingApprovals[0].toolName).toBe('calendar.createEvent');
+    expect(pausedTask.pendingApprovals[0].riskLevel).toBe('HIGH');
 
     // Simulate user approving the action via UI
     const resumedTask = await orchestrator.resumeWithApproval(
       pausedTask.id,
-      pausedTask.pendingApproval!.id,
+      pausedTask.pendingApprovals[0].id,
       'approved',
       mockUser,
       customPlanner
@@ -165,6 +167,7 @@ describe('Agent Orchestrator Integration Tests', () => {
       status: 'CREATED',
       plan: [],
       currentStep: 0,
+      pendingApprovals: [],
       iterations: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -176,15 +179,15 @@ describe('Agent Orchestrator Integration Tests', () => {
     const pausedTask = await orchestrator.runTask(task, mockUser, customPlanner);
 
     expect(pausedTask.status).toBe('WAITING_APPROVAL');
-    expect(pausedTask.pendingApproval).toBeDefined();
-    expect(pausedTask.pendingApproval?.toolName).toBe('telephony.makeCall');
-    expect(pausedTask.pendingApproval?.riskLevel).toBe('HIGH');
-    expect(pausedTask.pendingApproval?.description).toContain('Call Rahul at +91 98765 43210');
+    expect(pausedTask.pendingApprovals.length).toBe(1);
+    expect(pausedTask.pendingApprovals[0].toolName).toBe('telephony.makeCall');
+    expect(pausedTask.pendingApprovals[0].riskLevel).toBe('HIGH');
+    expect(pausedTask.pendingApprovals[0].description).toContain('Call Rahul at +91 98765 43210');
 
     // Simulate user approving via UI
     const resumedTask = await orchestrator.resumeWithApproval(
       pausedTask.id,
-      pausedTask.pendingApproval!.id,
+      pausedTask.pendingApprovals[0].id,
       'approved',
       mockUser,
       customPlanner

@@ -11,6 +11,21 @@ export type TaskStatus =
   | 'FAILED'
   | 'CANCELLED';
 
+export type WorkerAgentType =
+  | 'researcher'
+  | 'calendar_negotiator'
+  | 'food_specialist'
+  | 'communicator'
+  | 'general_worker';
+
+export type SubAgentStatus =
+  | 'pending'
+  | 'running'
+  | 'waiting_approval'
+  | 'completed'
+  | 'failed'
+  | 'skipped';
+
 export interface PlanStep {
   id: string;
   stepNumber: number;
@@ -22,10 +37,47 @@ export interface PlanStep {
   verified?: boolean;
 }
 
+export interface SubAgentTask {
+  id: string;
+  parentTaskId: string;
+  agentType: WorkerAgentType;
+  name: string;
+  goal: string;
+  stage: number;
+  dependencies: string[];
+  status: SubAgentStatus;
+  plan: PlanStep[];
+  pendingApproval?: Approval;
+  result?: any;
+  error?: string;
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface CoordinatorPlan {
+  isDecomposed: boolean;
+  strategy: 'single_agent' | 'swarm_pipeline';
+  summary: string;
+  totalStages: number;
+  subtasks: SubAgentTask[];
+}
+
 export interface TaskEvent {
   id: string;
   taskId: string;
-  type: 'tool_call' | 'approval_request' | 'approval_decision' | 'error' | 'status_change';
+  subAgentId?: string;
+  subAgentType?: WorkerAgentType;
+  type:
+    | 'tool_call'
+    | 'approval_request'
+    | 'approval_decision'
+    | 'error'
+    | 'status_change'
+    | 'subagent_spawned'
+    | 'subagent_started'
+    | 'subagent_completed'
+    | 'subagent_failed'
+    | 'swarm_aggregated';
   tool?: string;
   action?: string;
   status: 'started' | 'succeeded' | 'failed' | 'verified';
@@ -74,7 +126,7 @@ export interface Task {
   status: TaskStatus;
   plan: PlanStep[];
   currentStep: number;
-  pendingApproval?: Approval;
+  pendingApprovals: Approval[];
   finalAnswer?: string;
   error?: string;
   iterations: number;
@@ -86,5 +138,9 @@ export interface Task {
   routineId?: string;
   preApprovedTools?: string[];
   autoApproveRoutine?: boolean;
+  isSwarm?: boolean;
+  coordinatorPlan?: CoordinatorPlan;
+  subtasks?: SubAgentTask[];
 }
+
 

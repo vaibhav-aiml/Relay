@@ -223,12 +223,18 @@ export class InMemoryRepository implements IDatabaseRepository {
   }
 
   async getPendingApprovalForTask(taskId: string): Promise<Approval | null> {
+    const list = await this.getPendingApprovalsForTask(taskId);
+    return list.length > 0 ? list[0] : null;
+  }
+
+  async getPendingApprovalsForTask(taskId: string): Promise<Approval[]> {
+    const pending: Approval[] = [];
     for (const approval of this.approvals.values()) {
       if (approval.taskId === taskId && !approval.decision) {
-        return approval;
+        pending.push(approval);
       }
     }
-    return null;
+    return pending;
   }
 
   async resolveApproval(approvalId: string, decision: 'approved' | 'denied', reason?: string): Promise<Approval> {

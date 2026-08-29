@@ -117,8 +117,19 @@ export const useAppStore = create<AppState>((set, get) => ({
             const settings = TTSService.getSettings();
             if (currentStatus === 'COMPLETED' && task.finalAnswer && settings.autoSpeakResults) {
               speakResponse(task.finalAnswer);
-            } else if (currentStatus === 'WAITING_APPROVAL' && task.pendingApproval && settings.autoSpeakApprovals) {
-              speakResponse(`I need your approval to ${task.pendingApproval.description}`);
+            } else if (
+              currentStatus === 'WAITING_APPROVAL' &&
+              task.pendingApprovals &&
+              task.pendingApprovals.length > 0 &&
+              settings.autoSpeakApprovals
+            ) {
+              const count = task.pendingApprovals.length;
+              const firstAppr = task.pendingApprovals[0];
+              const msg =
+                count > 1
+                  ? `I need your approval for ${count} actions, starting with ${firstAppr?.description}`
+                  : `I need your approval to ${firstAppr?.description}`;
+              speakResponse(msg);
             }
             // Record what we spoke so we don't repeat on next tick
             const next = new Map(lastSpokenTaskStatus);
@@ -162,7 +173,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   submitApproval: async (approvalId: string, decision: 'approved' | 'denied', reason?: string) => {
     set({ isLoading: true, error: null });
     const current = get().currentTask;
-    const pending = current?.pendingApproval;
+    const pending = current?.pendingApprovals?.find((a) => a.id === approvalId);
 
     try {
       // If user approved a phone call, launch native dialer
@@ -213,49 +224,46 @@ export const useAppStore = create<AppState>((set, get) => ({
         const webFallbackUrl = String(pending.args?.webFallbackUrl || '');
         const platformName = String(pending.args?.platform || 'Food Delivery App');
 
-        (async () => {
-          try {
-            if (deepLinkUrl) {
-              const canOpen = await Linking.canOpenURL(deepLinkUrl).catch(() => false);
-              if (canOpen) {
-                await Linking.openURL(deepLinkUrl);
-                return;
-              }
-            }
-
-            // Fallback automatically to web URL if native app is not installed or cannot open
-            if (webFallbackUrl) {
+        try {
+          if (deepLinkUrl) {
+            const canOpen = await Linking.canOpenURL(deepLinkUrl).catch(() => false);
+            if (canOpen) {
+              await Linking.openURL(deepLinkUrl);
+            } else if (webFallbackUrl) {
               await Linking.openURL(webFallbackUrl);
-            } else {
-              Alert.alert(
-                `${platformName} Not Found`,
-                `Please install ${platformName} or check your internet connection.`,
-              );
             }
-          } catch (err) {
-            // If native deep link fails with ActivityNotFoundException, open web fallback
-            if (webFallbackUrl) {
-              Linking.openURL(webFallbackUrl).catch(() => {
-                Alert.alert(
-                  `Could Not Open ${platformName}`,
-                  `Unable to open ${platformName} app or web browser.`,
-                );
-              });
-            } else {
-              Alert.alert(
-                `${platformName} Not Found`,
-                `Please install ${platformName} to view this item.`,
-              );
-            }
+          } else if (webFallbackUrl) {
+            await Linking.openURL(webFallbackUrl);
           }
-        })();
+        } catch {
+          if (webFallbackUrl) {
+            Linking.openURL(webFallbackUrl).catch(() => {
+              Alert.alert(
+                `Could Not Open ${platformName}`,
+                `Unable to open ${platformName} app or web browser.`
+              );
+            });
+          }
+        }
       }
 
       await ApiService.submitApprovalDecision(approvalId, decision, reason);
       if (current) {
+        // Optimistically remove resolved approval from active queue
+        const remainingApprovals = (current.pendingApprovals || []).filter((a) => a.id !== approvalId);
+        set({
+          currentTask: {
+            ...current,
+            pendingApprovals: remainingApprovals,
+            status: remainingApprovals.length > 0 ? 'WAITING_APPROVAL' : 'EXECUTING',
+          },
+          isLoading: false,
+        });
+
         get().pollTaskUntilDone(current.id);
+      } else {
+        set({ isLoading: false });
       }
-      set({ isLoading: false });
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
     }

@@ -90,12 +90,17 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
       handleRelayResponse(currentTask.finalAnswer);
     } else if (
       currentTask.status === 'WAITING_APPROVAL' &&
-      currentTask.pendingApproval
+      currentTask.pendingApprovals &&
+      currentTask.pendingApprovals.length > 0
     ) {
       handledTaskIdsRef.current.add(currentTask.id);
-      handleRelayResponse(
-        `I need your approval to ${currentTask.pendingApproval.description}. Please check the approval card on screen.`,
-      );
+      const count = currentTask.pendingApprovals.length;
+      const firstAppr = currentTask.pendingApprovals[0];
+      const msg =
+        count > 1
+          ? `I need your approval for ${count} actions, starting with ${firstAppr?.description}. Please check the approval cards on screen.`
+          : `I need your approval to ${firstAppr?.description}. Please check the approval card on screen.`;
+      handleRelayResponse(msg);
     } else if (currentTask.status === 'FAILED') {
       handledTaskIdsRef.current.add(currentTask.id);
       handleRelayResponse(

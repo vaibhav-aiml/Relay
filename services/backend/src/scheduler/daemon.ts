@@ -170,6 +170,7 @@ export class SchedulerDaemon {
       status: 'CREATED',
       plan: [],
       currentStep: 0,
+      pendingApprovals: [],
       iterations: 0,
       createdAt: nowIso,
       updatedAt: nowIso,

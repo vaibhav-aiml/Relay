@@ -30,6 +30,7 @@ export async function taskRoutes(app: FastifyInstance) {
       status: 'CREATED',
       plan: [],
       currentStep: 0,
+      pendingApprovals: [],
       iterations: 0,
       createdAt: now,
       updatedAt: now,
@@ -95,12 +96,13 @@ export async function taskRoutes(app: FastifyInstance) {
     }
 
     const events = await db.getTaskEvents(id);
-    const pendingApproval = await db.getPendingApprovalForTask(id);
+    const pendingApprovals = await db.getPendingApprovalsForTask(id);
 
     return reply.send({
       task: {
         ...task,
-        pendingApproval: pendingApproval || undefined,
+        pendingApprovals,
+        pendingApproval: pendingApprovals[0] || undefined, // backward compatibility computed only at response boundary
       },
       events,
     });
