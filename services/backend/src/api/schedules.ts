@@ -119,6 +119,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     };
 
     await db.saveSchedule(routine);
+    SchedulerDaemon.notifyScheduleChanged();
     return reply.status(201).send({ schedule: routine });
   });
 
@@ -199,6 +200,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     };
 
     await db.saveSchedule(updated);
+    SchedulerDaemon.notifyScheduleChanged();
     return reply.send({ schedule: updated });
   });
 
@@ -227,6 +229,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
     }
 
     await db.saveSchedule(routine);
+    SchedulerDaemon.notifyScheduleChanged();
     return reply.send({ schedule: routine, message: `Routine is now ${newStatus}` });
   });
 
@@ -260,6 +263,7 @@ export async function scheduleRoutes(app: FastifyInstance) {
       return reply.status(404).send({ error: 'Routine not found or already deleted' });
     }
 
+    SchedulerDaemon.notifyScheduleChanged();
     return reply.send({ success: true, message: 'Routine deleted successfully' });
   });
 

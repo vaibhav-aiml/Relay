@@ -19,6 +19,16 @@ export const AGENT_CONFIG = {
   MAX_SWARM_WALL_CLOCK_MS: 300_000, // 5 minutes overall swarm execution cap
 } as const;
 
+/**
+ * Scheduler daemon configuration.
+ * Note: TICK_INTERVAL_MS is set to 60_000ms (1 min) instead of 15s to drastically reduce idle
+ * Firestore read volume and prevent 8 RESOURCE_EXHAUSTED free-tier quota exhaustion.
+ */
+export const SCHEDULER_CONFIG = {
+  TICK_INTERVAL_MS: 60_000, // 60s interval (relaxed to preserve Firestore quota)
+  STALE_WINDOW_MS: 300_000, // 5-minute catch-up window
+} as const;
+
 export const CAPABILITY_RISK_MAP: Record<string, { riskLevel: RiskLevel; description: string; requiresConfirmation: boolean }> = {
   // Web capabilities
   'web.search': { riskLevel: 'LOW', description: 'Search the web for information', requiresConfirmation: false },

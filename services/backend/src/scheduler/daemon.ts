@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { ScheduledRoutine, Task, User } from '@relay/shared-types';
+import { SCHEDULER_CONFIG } from '@relay/config';
 import { IDatabaseRepository } from '../database/types.js';
 import { getDatabase } from '../database/index.js';
 import { AgentOrchestrator } from '../agent/orchestrator.js';
@@ -19,10 +20,16 @@ export class SchedulerDaemon {
   private runningRoutineIds: Set<string> = new Set();
   private isRunning: boolean = false;
 
+  // In-memory cache to prevent constant Firestore reads when 0 active routines exist (prevents 8 RESOURCE_EXHAUSTED quota limits)
+  private hasActiveSchedulesCached: boolean = true;
+  private consecutiveEmptyTicks: number = 0;
+
   constructor(db?: IDatabaseRepository, options?: SchedulerDaemonOptions) {
     this.db = db || getDatabase();
     this.orchestrator = new AgentOrchestrator(this.db);
-    this.tickIntervalMs = options?.tickIntervalMs || 15_000;
+    // Quota optimization: default tick interval increased to 60_000ms (configured in SCHEDULER_CONFIG)
+    // from 15_000ms to reduce idle Firestore read volume and prevent RESOURCE_EXHAUSTED quota caps.
+    this.tickIntervalMs = options?.tickIntervalMs || SCHEDULER_CONFIG.TICK_INTERVAL_MS;
   }
 
   public static getInstance(db?: IDatabaseRepository, options?: SchedulerDaemonOptions): SchedulerDaemon {
@@ -30,6 +37,20 @@ export class SchedulerDaemon {
       SchedulerDaemon.instance = new SchedulerDaemon(db, options);
     }
     return SchedulerDaemon.instance;
+  }
+
+  /**
+   * Wakes the daemon up and marks active schedules present when a routine is created/modified/toggled.
+   */
+  public markSchedulesModified(): void {
+    this.hasActiveSchedulesCached = true;
+    this.consecutiveEmptyTicks = 0;
+  }
+
+  public static notifyScheduleChanged(): void {
+    if (SchedulerDaemon.instance) {
+      SchedulerDaemon.instance.markSchedulesModified();
+    }
   }
 
   /**
@@ -70,12 +91,27 @@ export class SchedulerDaemon {
    * Can be invoked directly in unit tests for deterministic testing.
    */
   public async tick(): Promise<void> {
+    // Quota optimization: Short-circuit if cached that no active schedules exist,
+    // only performing a periodic check once every 5 minutes (5 consecutive empty ticks)
+    // to preserve Spark free tier quota while idling.
+    if (!this.hasActiveSchedulesCached && this.consecutiveEmptyTicks < 5) {
+      this.consecutiveEmptyTicks++;
+      return;
+    }
+
     const now = new Date();
     const nowIso = now.toISOString();
 
     let dueRoutines: ScheduledRoutine[] = [];
     try {
       dueRoutines = await this.db.getDueSchedules(nowIso);
+      if (dueRoutines.length === 0) {
+        this.hasActiveSchedulesCached = false;
+        this.consecutiveEmptyTicks++;
+      } else {
+        this.hasActiveSchedulesCached = true;
+        this.consecutiveEmptyTicks = 0;
+      }
     } catch (dbErr: any) {
       console.error('[SchedulerDaemon] Failed to fetch due schedules from DB:', dbErr.message);
       return;

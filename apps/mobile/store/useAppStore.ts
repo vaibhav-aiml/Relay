@@ -101,9 +101,51 @@ export const useAppStore = create<AppState>((set, get) => ({
   pollTaskUntilDone: (taskId: string) => {
     set({ isPolling: true });
 
+    let timer: NodeJS.Timeout | null = null;
+    let isCancelled = false;
+    const startTime = Date.now();
+
+    /**
+     * Quota Optimization & Backoff Schedule:
+     * Previously polled on an aggressive fixed interval which exhausted the Firestore Spark daily
+     * quota cap (8 RESOURCE_EXHAUSTED). Now uses a progressive backoff:
+     * - First ~10s: 1200ms (fast UI feedback for quick single-turn queries)
+     * - Next ~30s (10s-40s): 3000ms (moderate polling for typical planner runs)
+     * - Beyond 40s: 6000ms (relaxed polling for multi-stage swarms and waiting approvals)
+     * - After 10 minutes: Stop polling (hard ceiling to prevent backgrounded/abandoned tabs from running forever)
+     */
+    const getNextDelayMs = (elapsedMs: number): number | null => {
+      const TEN_MINUTES_MS = 10 * 60 * 1000;
+      if (elapsedMs >= TEN_MINUTES_MS) {
+        return null; // Stop auto-polling after hard ceiling
+      }
+      if (elapsedMs < 10_000) {
+        return 1200;
+      }
+      if (elapsedMs < 40_000) {
+        return 3000;
+      }
+      return 6000;
+    };
+
+    const scheduleNext = () => {
+      if (isCancelled) return;
+      const elapsed = Date.now() - startTime;
+      const delay = getNextDelayMs(elapsed);
+      if (delay === null) {
+        set({ isPolling: false });
+        return;
+      }
+      timer = setTimeout(async () => {
+        await pollTick();
+      }, delay);
+    };
+
     const pollTick = async () => {
+      if (isCancelled) return;
       try {
         const { task, events } = await ApiService.getTask(taskId);
+        if (isCancelled) return;
         set({ currentTask: task, taskEvents: events });
 
         // ─── Auto-speak with transition-edge detection ───
@@ -145,27 +187,35 @@ export const useAppStore = create<AppState>((set, get) => ({
           task.status === 'WAITING_APPROVAL'
         ) {
           if (task.status !== 'WAITING_APPROVAL') {
-            clearInterval(interval);
+            isCancelled = true;
+            if (timer) clearTimeout(timer);
             set({ isPolling: false });
             // Clean up edge-guard entry — prevents unbounded Map growth
             const next = new Map(get().lastSpokenTaskStatus);
             next.delete(taskId);
             set({ lastSpokenTaskStatus: next });
+          } else {
+            // Task is waiting for user approval: continue polling at widened rate
+            scheduleNext();
           }
           get().fetchTasks();
+        } else {
+          // Task still executing (EXECUTING, PLANNING, etc.): continue polling with backoff
+          scheduleNext();
         }
       } catch (err) {
-        clearInterval(interval);
+        isCancelled = true;
+        if (timer) clearTimeout(timer);
         set({ isPolling: false });
       }
     };
 
     // Immediate initial check (saves up to 1-2s for fast LLM answers)
     pollTick();
-    const interval = setInterval(pollTick, 450);
 
     return () => {
-      clearInterval(interval);
+      isCancelled = true;
+      if (timer) clearTimeout(timer);
       set({ isPolling: false });
     };
   },
