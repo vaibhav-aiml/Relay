@@ -71,9 +71,18 @@ describe('WorkerAgent Unit Tests', () => {
       plan: [],
     };
 
+    const mockParentTask: any = {
+      id: 'parent-task-1',
+      userId: testUser.id,
+      goal: 'Research TypeScript 5.8 features',
+      status: 'EXECUTING',
+      plan: [],
+      pendingApprovals: [],
+    };
+
     const planner = new MockResearcherPlanner(testUser);
     const result = await WorkerAgent.execute(subtask, {
-      parentTaskId: 'parent-task-1',
+      parentTask: mockParentTask,
       user: testUser,
       db,
       planner,
@@ -123,9 +132,18 @@ describe('WorkerAgent Unit Tests', () => {
       plan: [],
     };
 
+    const mockParentTask: any = {
+      id: 'parent-task-1',
+      userId: testUser.id,
+      goal: 'Illegal Order Mission',
+      status: 'EXECUTING',
+      plan: [],
+      pendingApprovals: [],
+    };
+
     const planner = new MockIllegalPlanner(testUser);
     const result = await WorkerAgent.execute(subtask, {
-      parentTaskId: 'parent-task-1',
+      parentTask: mockParentTask,
       user: testUser,
       db,
       planner,
@@ -163,9 +181,18 @@ describe('WorkerAgent Unit Tests', () => {
       plan: [],
     };
 
+    const mockParentTask: any = {
+      id: 'parent-task-1',
+      userId: testUser.id,
+      goal: 'Order Cold Coffee on Zomato',
+      status: 'EXECUTING',
+      plan: [],
+      pendingApprovals: [],
+    };
+
     const planner = new MockApprovalPlanner(testUser);
     const result = await WorkerAgent.execute(subtask, {
-      parentTaskId: 'parent-task-1',
+      parentTask: mockParentTask,
       user: testUser,
       db,
       planner,

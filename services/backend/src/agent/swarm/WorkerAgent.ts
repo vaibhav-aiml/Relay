@@ -1,4 +1,4 @@
-import { SubAgentTask, User, Memory, PlanStep, Approval } from '@relay/shared-types';
+import { SubAgentTask, User, Memory, PlanStep, Approval, Task } from '@relay/shared-types';
 import { AGENT_CONFIG } from '@relay/config';
 import { IDatabaseRepository } from '../../database/types.js';
 import { ToolRegistry } from '../../tools/registry.js';
@@ -9,7 +9,7 @@ import { ARCHETYPES } from './archetypes.js';
 import { dispatchApprovalAlert } from '../../scheduler/notifications.js';
 
 export interface WorkerExecutionOptions {
-  parentTaskId: string;
+  parentTask: Task;
   user: User;
   db: IDatabaseRepository;
   memories?: Memory[];
@@ -29,7 +29,8 @@ export class WorkerAgent {
     subtask: SubAgentTask,
     options: WorkerExecutionOptions
   ): Promise<SubAgentTask> {
-    const { parentTaskId, user, db, memories = [], upstreamContext, planner: customPlanner, llmConcurrencyLimiter } = options;
+    const { parentTask, user, db, memories = [], upstreamContext, planner: customPlanner, llmConcurrencyLimiter } = options;
+    const parentTaskId = parentTask.id;
     const archetype = ARCHETYPES[subtask.agentType] || ARCHETYPES.general_worker;
     const registry = ToolRegistry.getInstance();
     const planner = customPlanner || new Planner(user);
@@ -177,7 +178,7 @@ export class WorkerAgent {
             });
 
             if (user.profile?.pushToken) {
-              dispatchApprovalAlert(db, user, { id: parentTaskId } as any, approval).catch((err) => {
+              dispatchApprovalAlert(db, user, parentTask, approval).catch((err) => {
                 console.warn(`[WorkerAgent] Push notification failed: ${err.message}`);
               });
             }

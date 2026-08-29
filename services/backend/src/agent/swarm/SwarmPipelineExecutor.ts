@@ -120,7 +120,7 @@ export class SwarmPipelineExecutor {
         // 4. Execute all subtasks in this stage in parallel via Promise.allSettled
         const workerPromises = stageSubtasks.map((st) =>
           WorkerAgent.execute(st, {
-            parentTaskId: task.id,
+            parentTask: task,
             user,
             db: this.db,
             memories,
@@ -277,7 +277,7 @@ export class SwarmPipelineExecutor {
       const upstreamContext = this.extractUpstreamContext(subtasks, targetSubtask.stage);
 
       const continuedSubtask = await WorkerAgent.execute(targetSubtask, {
-        parentTaskId: task.id,
+        parentTask: task,
         user,
         db: this.db,
         memories,
