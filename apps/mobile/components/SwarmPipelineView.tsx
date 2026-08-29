@@ -179,6 +179,16 @@ export const SwarmPipelineView: React.FC<SwarmPipelineViewProps> = ({ subtasks }
                       </View>
                     )}
 
+                    {/* Error Box if failed */}
+                    {st.error && (
+                      <View style={styles.errorBox}>
+                        <Text style={styles.errorLabel}>Failure Reason:</Text>
+                        <Text style={styles.errorText} numberOfLines={isExpanded ? 0 : 3}>
+                          {st.error}
+                        </Text>
+                      </View>
+                    )}
+
                     {/* Expandable Step Trace */}
                     {isExpanded && st.plan && st.plan.length > 0 && (
                       <View style={styles.expandedSteps}>
@@ -187,7 +197,19 @@ export const SwarmPipelineView: React.FC<SwarmPipelineViewProps> = ({ subtasks }
                           <View key={step.id || idx} style={styles.stepRow}>
                             <Text style={styles.stepNumber}>#{idx + 1}</Text>
                             <Text style={styles.stepDesc}>{step.description}</Text>
-                            <Text style={[styles.stepStatus, { color: step.status === 'completed' ? '#10b981' : '#f59e0b' }]}>
+                            <Text
+                              style={[
+                                styles.stepStatus,
+                                {
+                                  color:
+                                    step.status === 'completed'
+                                      ? '#10b981'
+                                      : step.status === 'failed'
+                                      ? '#ef4444'
+                                      : '#f59e0b',
+                                },
+                              ]}
+                            >
                               {step.status}
                             </Text>
                           </View>
@@ -349,6 +371,26 @@ const styles = StyleSheet.create({
   deliverableText: {
     fontSize: 12,
     color: '#e2e8f0',
+    lineHeight: 16,
+  },
+  errorBox: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    padding: 8,
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#ef4444',
+    marginBottom: 8,
+  },
+  errorLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#ef4444',
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  errorText: {
+    fontSize: 12,
+    color: '#fca5a5',
     lineHeight: 16,
   },
   expandedSteps: {

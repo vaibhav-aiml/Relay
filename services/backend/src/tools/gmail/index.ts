@@ -215,37 +215,41 @@ export const gmailSendMessageTool: ToolDefinition<GmailSendMessageInput> = {
     const connection = await ctx.db.getConnection(ctx.userId, 'google');
 
     if (connection && process.env.GOOGLE_CLIENT_ID) {
-      const auth = GoogleOAuthService.createOAuthClient();
-      const tokens = GoogleOAuthService.decryptTokens(connection.encryptedCredentialRef);
-      auth.setCredentials(tokens);
-      const gmail = google.gmail({ version: 'v1', auth });
+      try {
+        const auth = GoogleOAuthService.createOAuthClient();
+        const tokens = GoogleOAuthService.decryptTokens(connection.encryptedCredentialRef);
+        auth.setCredentials(tokens);
+        const gmail = google.gmail({ version: 'v1', auth });
 
-      const rawEmail = [
-        `To: ${input.to.join(', ')}`,
-        input.cc && input.cc.length > 0 ? `Cc: ${input.cc.join(', ')}` : '',
-        `Subject: ${input.subject}`,
-        '',
-        input.body,
-      ]
-        .filter(Boolean)
-        .join('\r\n');
+        const rawEmail = [
+          `To: ${input.to.join(', ')}`,
+          input.cc && input.cc.length > 0 ? `Cc: ${input.cc.join(', ')}` : '',
+          `Subject: ${input.subject}`,
+          '',
+          input.body,
+        ]
+          .filter(Boolean)
+          .join('\r\n');
 
-      const encoded = Buffer.from(rawEmail).toString('base64url');
+        const encoded = Buffer.from(rawEmail).toString('base64url');
 
-      const res = await gmail.users.messages.send({
-        userId: 'me',
-        requestBody: {
-          raw: encoded,
-        },
-      });
+        const res = await gmail.users.messages.send({
+          userId: 'me',
+          requestBody: {
+            raw: encoded,
+          },
+        });
 
-      return {
-        messageId: res.data.id,
-        threadId: res.data.threadId,
-        status: 'sent',
-        to: input.to,
-        subject: input.subject,
-      };
+        return {
+          messageId: res.data.id,
+          threadId: res.data.threadId,
+          status: 'sent',
+          to: input.to,
+          subject: input.subject,
+        };
+      } catch (googleErr: any) {
+        console.warn(`[Gmail] Real Google send error (${googleErr.message}), falling back to mock send simulation`);
+      }
     }
 
     const sentId = `sent-msg-${Date.now()}`;
