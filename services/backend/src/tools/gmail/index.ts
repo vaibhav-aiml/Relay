@@ -160,16 +160,17 @@ export const gmailDraftMessageTool: ToolDefinition<GmailDraftMessageInput> = {
         auth.setCredentials(tokens);
         const gmail = google.gmail({ version: 'v1', auth });
 
-        const rawEmail = [
+        const headerLines = [
           `To: ${input.to.join(', ')}`,
           input.cc && input.cc.length > 0 ? `Cc: ${input.cc.join(', ')}` : '',
           `Subject: ${input.subject}`,
-          '',
-          input.body,
+          'MIME-Version: 1.0',
+          'Content-Type: text/plain; charset=utf-8',
         ]
           .filter(Boolean)
           .join('\r\n');
 
+        const rawEmail = `${headerLines}\r\n\r\n${input.body}`;
         const encoded = Buffer.from(rawEmail).toString('base64url');
 
         const res = await gmail.users.drafts.create({
@@ -228,16 +229,17 @@ export const gmailSendMessageTool: ToolDefinition<GmailSendMessageInput> = {
         auth.setCredentials(tokens);
         const gmail = google.gmail({ version: 'v1', auth });
 
-        const rawEmail = [
+        const headerLines = [
           `To: ${input.to.join(', ')}`,
           input.cc && input.cc.length > 0 ? `Cc: ${input.cc.join(', ')}` : '',
           `Subject: ${input.subject}`,
-          '',
-          input.body,
+          'MIME-Version: 1.0',
+          'Content-Type: text/plain; charset=utf-8',
         ]
           .filter(Boolean)
           .join('\r\n');
 
+        const rawEmail = `${headerLines}\r\n\r\n${input.body}`;
         const encoded = Buffer.from(rawEmail).toString('base64url');
 
         const res = await gmail.users.messages.send({
