@@ -62,3 +62,7 @@ logs/
 Thumbs.db
 .idea/
 .vscode/
+
+# Local Data & Persistent Tokens
+services/backend/data/
+

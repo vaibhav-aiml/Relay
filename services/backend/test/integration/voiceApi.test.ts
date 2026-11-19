@@ -80,4 +80,17 @@ For more details check https://example.com/project-notes.
 
     expect(res.statusCode).toBe(400);
   });
+
+  it('POST /api/voice/format-for-speech formats phone numbers digit-by-digit for natural speech', async () => {
+    const raw = 'I need your approval to Call Heartbeat at 8004100.';
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/voice/format-for-speech',
+      payload: { text: raw },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.spokenText).toContain('eight, zero, zero, four, one, zero, zero');
+  });
 });

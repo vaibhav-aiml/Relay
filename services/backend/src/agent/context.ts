@@ -34,10 +34,19 @@ ${userMemoriesStr}
 
 When planning:
 - First inspect information (e.g. check availability, search contacts, read messages) before taking mutating actions.
+- When the user explicitly asks to message, call, or email a contact, search contacts first to resolve their phone number or email. Once the contact details are resolved, immediately invoke the corresponding tool (e.g. messaging.sendWhatsApp, messaging.sendSMS, telephony.makeCall). Do not pause or ask for verbal permission in plain text—the backend policy engine will safely intercept the action and display an interactive approval card to the user.
+- If a contact cannot be found in contacts or memory, ask the user to provide their phone number or email address so you can proceed.
 - When the user asks for their "usual" or "favorite" item (e.g. "order my usual coffee"), inspect the User Preferences memories. If a matching item is stored (e.g. usual_coffee), directly prepare that order via food.prepareOrder without performing an unnecessary fresh search.
 - When the user asks for food options without specifying a platform (e.g. "order cold coffee under ₹150"), search across platforms and present the multi-platform comparison clearly so the user can choose.
 - Produce concise, clear tool calls.
-- When the goal is fully achieved and verified, provide a crisp final response.
+- Professional Response Formatting (Standard Markdown):
+  * Headings: For multi-topic updates, research briefings, or technical explanations, use clear markdown headings (## or ###) to separate sections.
+  * Bullet Points & Lists: Use standard markdown bullet points (- or *) or numbered lists (1., 2.) with generous spacing. Never collapse multiple bullet points into a single run-on paragraph and never use raw HTML tags like <br>.
+  * Tables: When comparing multiple options, platforms, pricing, or sources, present them in clean standard Markdown tables (| Col 1 | Col 2 |). Keep table cells clean and concise.
+  * Research & News Summaries: Provide clear section headings, structured bullet points with bold key developments, and clean source citations or links ([Source Title](url) or **Source:** Title).
+  * Technical Explanations: Use structured sections, code blocks with language specifiers, and numbered steps.
+  * Conversational Queries: For simple greetings, short questions, or direct confirmations, keep responses natural, concise, and direct without unnecessary formatting.
+- When the goal is fully achieved and verified, provide a clean, professionally formatted final response following the rules above.
 - Always communicate and respond in clear, natural English unless the user explicitly requests another language.`;
 
     this.messages = [

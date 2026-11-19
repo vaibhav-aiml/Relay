@@ -77,6 +77,54 @@ class TTSServiceClass {
 
   // ─── Core Speech ───
 
+  private static readonly DIGIT_WORDS: Record<string, string> = {
+    '0': 'zero',
+    '1': 'one',
+    '2': 'two',
+    '3': 'three',
+    '4': 'four',
+    '5': 'five',
+    '6': 'six',
+    '7': 'seven',
+    '8': 'eight',
+    '9': 'nine',
+  };
+
+  /**
+   * Converts phone numbers in text into digit-by-digit spoken words
+   * (e.g. 9876543210 -> "nine, eight, seven, six, five, four, three, two, one, zero")
+   * so the TTS engine pronounces each digit individually rather than as a large numerical
+   * value like "eight million four thousand".
+   */
+  public formatPhoneNumbersForSpeech(text: string): string {
+    return text.replace(
+      /(?:\+?\b|\+)(?=[^a-zA-Z\n]*\d)(?:\(?\+?\d{1,4}\)?[\s\-\.]?)?(?:\(?\d{2,4}\)?[\s\-\.]?){1,4}\d{2,4}\b/g,
+      (match) => {
+        const trimmed = match.trim();
+        // Do not convert dates (e.g. 2026-11-20 or 20/11/2026)
+        if (/^\d{4}[-\/]\d{2}[-\/]\d{2}$/.test(trimmed) || /^\d{2}[-\/]\d{2}[-\/]\d{4}$/.test(trimmed)) {
+          return match;
+        }
+
+        // Count actual digits in match
+        const digits = trimmed.match(/\d/g) || [];
+        if (digits.length >= 7 && digits.length <= 15) {
+          const parts: string[] = [];
+          for (let i = 0; i < trimmed.length; i++) {
+            const char = trimmed[i];
+            if (char === '+') {
+              parts.push('plus');
+            } else if (TTSServiceClass.DIGIT_WORDS[char]) {
+              parts.push(TTSServiceClass.DIGIT_WORDS[char]);
+            }
+          }
+          return parts.join(', ');
+        }
+        return match;
+      }
+    );
+  }
+
   /**
    * Speak text aloud. Always stops any in-progress speech first.
    * Chunks long text on sentence boundaries to avoid Android truncation.
@@ -88,7 +136,10 @@ class TTSServiceClass {
     const pitch = options?.pitch ?? this.settings.pitch;
     const voiceId = options?.voiceId ?? this.settings.voiceId ?? this.defaultVoiceId;
 
-    const chunks = this.chunkText(text);
+    // Convert phone numbers to digit-by-digit spoken words
+    const speechReadyText = this.formatPhoneNumbersForSpeech(text);
+
+    const chunks = this.chunkText(speechReadyText);
 
     for (const chunk of chunks) {
       await new Promise<void>((resolve) => {
@@ -171,6 +222,9 @@ class TTSServiceClass {
    */
   formatForSpeech(text: string, maxLength: number = 300): string {
     let result = text;
+
+    // Convert phone numbers to digit-by-digit spoken words
+    result = this.formatPhoneNumbersForSpeech(result);
 
     // Strip markdown headers
     result = result.replace(/^#{1,6}\s+/gm, '');

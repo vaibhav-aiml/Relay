@@ -32,6 +32,22 @@ export async function connectionRoutes(app: FastifyInstance) {
     return reply.send({ authUrl });
   });
 
+  // Direct browser connect route (visit http://localhost:4000/api/connections/google/connect in any browser)
+  app.get('/google/connect', async (req, reply) => {
+    const userId = (req.query as any)?.userId || 'user-chandra';
+    const scopes = [
+      GOOGLE_SCOPES.GMAIL_READONLY,
+      GOOGLE_SCOPES.GMAIL_COMPOSE,
+      GOOGLE_SCOPES.GMAIL_SEND,
+      GOOGLE_SCOPES.CALENDAR_READONLY,
+      GOOGLE_SCOPES.CALENDAR_EVENTS,
+      GOOGLE_SCOPES.CONTACTS_READONLY,
+    ];
+
+    const authUrl = GoogleOAuthService.getAuthUrl(scopes, userId);
+    return reply.redirect(authUrl);
+  });
+
   // OAuth Callback
   app.get<{ Querystring: { code?: string; state?: string; error?: string } }>('/google/callback', async (req, reply) => {
     const { code, state: userId, error } = req.query;

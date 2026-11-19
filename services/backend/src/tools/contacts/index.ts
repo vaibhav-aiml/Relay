@@ -51,8 +51,13 @@ export const contactsSearchTool: ToolDefinition<ContactsSearchInput> = {
     // 2. User's Synced Device Contacts (from on-device phone book)
     const deviceContacts = await ctx.db.getUserContacts(ctx.userId);
     if (deviceContacts.length > 0) {
+      const queryTokens = queryLower.split(/\s+/).filter(Boolean);
       const deviceMatches = deviceContacts.filter((c) => {
-        const nameMatch = c.name.toLowerCase().includes(queryLower);
+        const contactNameLower = c.name.toLowerCase();
+        const nameMatch =
+          contactNameLower.includes(queryLower) ||
+          queryLower.includes(contactNameLower) ||
+          queryTokens.some((tok) => tok.length > 2 && contactNameLower.includes(tok));
         const emailMatch = c.email ? c.email.toLowerCase().includes(queryLower) : false;
         const relationMatch = c.relation ? c.relation.toLowerCase().includes(queryLower) : false;
         const phoneMatch = c.phone ? c.phone.replace(/\s+/g, '').includes(queryLower.replace(/\s+/g, '')) : false;

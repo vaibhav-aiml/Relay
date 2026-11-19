@@ -1,4 +1,4 @@
-import * as Contacts from 'expo-contacts';
+import * as Contacts from 'expo-contacts/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ApiService } from './api';
 import { UserContact } from '@relay/shared-types';

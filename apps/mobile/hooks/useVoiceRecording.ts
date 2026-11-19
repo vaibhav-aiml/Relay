@@ -1,6 +1,11 @@
 import { useState, useRef, useCallback } from 'react';
 import { Alert, Platform } from 'react-native';
-import { Audio } from 'expo-av';
+import {
+  useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from 'expo-audio';
 import * as FileSystem from 'expo-file-system/legacy';
 import { ApiService } from '../services/api';
 import { TTSService } from '../services/tts';
@@ -14,28 +19,22 @@ interface UseVoiceRecordingReturn {
 }
 
 /**
- * Shared voice recording hook used by both VoiceButton (press-to-talk)
- * and VoiceMode (continuous hands-free loop).
- *
- * IMPORTANT: startRecording() calls TTSService.stop() internally to
- * guarantee that any in-progress TTS speech is silenced before the mic
- * activates. This prevents the auto-re-listen loop in VoiceMode from
- * accidentally recording Relay's own voice.
+ * Shared voice recording hook using modern Expo SDK 58 `expo-audio`.
+ * Used by both VoiceButton (press-to-talk) and VoiceMode (continuous hands-free loop).
  */
 export function useVoiceRecording(): UseVoiceRecordingReturn {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const isRecordingRef = useRef(false);
 
   const startRecording = useCallback(async () => {
-    // Always stop any in-progress TTS before recording — this lives HERE
-    // (not in callers) so VoiceMode's programmatic auto-re-listen path
-    // can't accidentally forget it.
+    // Always stop any in-progress TTS before recording
     TTSService.stop();
 
     try {
       // Request microphone permission
-      const permStatus = await Audio.requestPermissionsAsync();
+      const permStatus = await requestRecordingPermissionsAsync();
       if (!permStatus.granted) {
         Alert.alert(
           'Microphone Permission Required',
@@ -45,61 +44,40 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
       }
 
       // Configure audio mode for recording
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+      await setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
 
-      // Start recording with high quality settings
-      const { recording } = await Audio.Recording.createAsync({
-        android: {
-          extension: '.m4a',
-          outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-          audioEncoder: Audio.AndroidAudioEncoder.AAC,
-          sampleRate: 44100,
-          numberOfChannels: 1,
-          bitRate: 128000,
-        },
-        ios: {
-          extension: '.m4a',
-          outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-          audioQuality: Audio.IOSAudioQuality.HIGH,
-          sampleRate: 44100,
-          numberOfChannels: 1,
-          bitRate: 128000,
-        },
-        web: {
-          mimeType: 'audio/webm',
-          bitsPerSecond: 128000,
-        },
-      });
-
-      recordingRef.current = recording;
+      // Prepare and start recording
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      isRecordingRef.current = true;
       setIsRecording(true);
     } catch (err: any) {
       console.warn('Failed to start recording:', err);
       Alert.alert('Recording Error', `Could not start voice recording: ${err.message}`);
     }
-  }, []);
+  }, [audioRecorder]);
 
   const stopAndTranscribe = useCallback(async (): Promise<string | null> => {
-    if (!recordingRef.current) return null;
+    if (!isRecordingRef.current) return null;
 
+    isRecordingRef.current = false;
     setIsRecording(false);
     setIsTranscribing(true);
 
     try {
       // Stop the recording
-      await recordingRef.current.stopAndUnloadAsync();
+      await audioRecorder.stop();
 
       // Reset audio mode
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
+      await setAudioModeAsync({
+        allowsRecording: false,
       });
 
       // Get the recorded file URI
-      const uri = recordingRef.current.getURI();
-      recordingRef.current = null;
+      const uri = audioRecorder.uri;
 
       if (!uri) {
         throw new Error('No audio file was created');
@@ -161,20 +139,20 @@ export function useVoiceRecording(): UseVoiceRecordingReturn {
     } finally {
       setIsTranscribing(false);
     }
-  }, []);
+  }, [audioRecorder]);
 
   const cancelRecording = useCallback(async () => {
-    if (recordingRef.current) {
+    if (isRecordingRef.current) {
+      isRecordingRef.current = false;
       try {
-        await recordingRef.current.stopAndUnloadAsync();
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+        await audioRecorder.stop();
+        await setAudioModeAsync({ allowsRecording: false });
       } catch {
         // Ignore cleanup errors
       }
-      recordingRef.current = null;
       setIsRecording(false);
     }
-  }, []);
+  }, [audioRecorder]);
 
   return {
     isRecording,

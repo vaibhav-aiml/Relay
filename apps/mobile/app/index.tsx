@@ -20,6 +20,7 @@ import { ApprovalCard } from '../components/ApprovalCard';
 import { ApprovalCardQueue } from '../components/ApprovalCardQueue';
 import { TaskCard } from '../components/TaskCard';
 import { VoiceMode } from '../components/VoiceMode';
+import { StepTrace } from '../components/StepTrace';
 import { useAppStore } from '../store/useAppStore';
 
 const QUICK_PROMPTS = [
@@ -41,6 +42,7 @@ export default function HomeScreen() {
 
   const {
     currentTask,
+    taskEvents,
     tasks,
     isLoading,
     createTask,
@@ -98,6 +100,9 @@ export default function HomeScreen() {
             <TouchableOpacity onPress={() => router.push(`/task/${currentTask.id}`)}>
               <TaskStatusLive task={currentTask} onCancel={cancelCurrentTask} />
             </TouchableOpacity>
+
+            {/* Real-time Step Breakdown and Execution Timeline */}
+            <StepTrace steps={currentTask.plan || []} events={taskEvents} />
 
             {currentTask.pendingApprovals && currentTask.pendingApprovals.length > 0 && (
               <ApprovalCardQueue

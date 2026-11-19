@@ -309,7 +309,7 @@ export default function HistoryScreen() {
                   {/* Final Answer / Result Preview if completed */}
                   {t.finalAnswer ? (
                     <Text style={styles.cardFinalAnswer} numberOfLines={1}>
-                      ✓ {t.finalAnswer}
+                      ✓ {t.finalAnswer.replace(/\|/g, ' ').replace(/[-*#`]/g, '').replace(/<br\s*\/?>/gi, ' ').replace(/\s+/g, ' ').trim()}
                     </Text>
                   ) : null}
 

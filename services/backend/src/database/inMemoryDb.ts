@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { User, Task, TaskEvent, Approval, Memory, Connection, UserContact, TaskFilterOptions, ScheduledRoutine, ScheduleStatus } from '@relay/shared-types';
 import { IDatabaseRepository } from './types.js';
@@ -33,6 +35,7 @@ export class InMemoryRepository implements IDatabaseRepository {
       ...defaultUser,
       id: 'user-chandra',
     });
+    this.loadConnectionsFromDisk();
   }
 
   // Users
@@ -313,6 +316,47 @@ export class InMemoryRepository implements IDatabaseRepository {
   }
 
   // Connections
+  private getConnectionsFilePath(): string {
+    const dataDir = path.resolve(process.cwd(), 'services/backend/data');
+    if (!fs.existsSync(dataDir)) {
+      try {
+        fs.mkdirSync(dataDir, { recursive: true });
+      } catch {}
+    }
+    return path.join(dataDir, 'connections.json');
+  }
+
+  private persistConnectionsToDisk(): void {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const filePath = this.getConnectionsFilePath();
+      const all: Record<string, Connection[]> = {};
+      for (const [userId, conns] of this.connections.entries()) {
+        all[userId] = conns;
+      }
+      fs.writeFileSync(filePath, JSON.stringify(all, null, 2), 'utf-8');
+    } catch (err) {
+      console.warn('[InMemoryDB] Could not persist connections to disk:', err);
+    }
+  }
+
+  private loadConnectionsFromDisk(): void {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const filePath = this.getConnectionsFilePath();
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, 'utf-8');
+        const all: Record<string, Connection[]> = JSON.parse(raw);
+        for (const [userId, conns] of Object.entries(all)) {
+          this.connections.set(userId, conns);
+        }
+        console.log('[InMemoryDB] Restored persisted Google connections from local disk.');
+      }
+    } catch (err) {
+      console.warn('[InMemoryDB] Could not load persisted connections from disk:', err);
+    }
+  }
+
   async saveConnection(connection: Connection): Promise<Connection> {
     const userConnections = this.connections.get(connection.userId) || [];
     const idx = userConnections.findIndex((c) => c.id === connection.id || c.provider === connection.provider);
@@ -322,18 +366,28 @@ export class InMemoryRepository implements IDatabaseRepository {
       userConnections.push(connection);
     }
     this.connections.set(connection.userId, userConnections);
+    this.persistConnectionsToDisk();
     return connection;
   }
 
   async getConnection(userId: string, provider: 'google'): Promise<Connection | null> {
     const userConnections = this.connections.get(userId) || [];
-    return userConnections.find((c) => c.provider === provider && c.status === 'active') || null;
+    let conn = userConnections.find((c) => c.provider === provider && c.status === 'active');
+    if (conn) return conn;
+
+    // Fallback: in local development, check all active connections across demo user IDs
+    for (const [, conns] of this.connections.entries()) {
+      const anyConn = conns.find((c) => c.provider === provider && c.status === 'active');
+      if (anyConn) return anyConn;
+    }
+    return null;
   }
 
   async deleteConnection(userId: string, connectionId: string): Promise<boolean> {
     const userConnections = this.connections.get(userId) || [];
     const filtered = userConnections.filter((c) => c.id !== connectionId);
     this.connections.set(userId, filtered);
+    this.persistConnectionsToDisk();
     return filtered.length < userConnections.length;
   }
 }

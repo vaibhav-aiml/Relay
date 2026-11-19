@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Linking } from 'react-native';
 import { Task, TaskStatus } from '@relay/shared-types';
 import { CheckCircle2, AlertCircle, Clock, Ban, Cpu, ExternalLink, Utensils, HelpCircle } from 'lucide-react-native';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 interface TaskStatusLiveProps {
   task: Task;
@@ -36,6 +37,66 @@ export const extractDiscoveredOptions = (task: Task): DiscoveredOption[] => {
     }
   }
   return list;
+};
+
+export const isClarificationQuestion = (answer?: string): boolean => {
+  if (!answer) return false;
+  const trimmed = answer.trim();
+
+  // If the answer is structured with markdown tables or code blocks, it's a report/summary
+  if (trimmed.includes('|---') || trimmed.includes('| :--') || trimmed.includes('```')) {
+    const paragraphs = trimmed.split(/\n\s*\n/);
+    const lastParagraph = paragraphs[paragraphs.length - 1]?.trim() || '';
+    return (
+      (lastParagraph.endsWith('?') ||
+        /\b(would you like|should i|do you want me to|how would you like to proceed)\b/i.test(lastParagraph)) &&
+      !lastParagraph.startsWith('|') &&
+      !lastParagraph.startsWith('>') &&
+      !lastParagraph.endsWith('?"') &&
+      !lastParagraph.endsWith('?*')
+    );
+  }
+
+  // Extract trailing lines
+  const lines = trimmed.split('\n').map((l) => l.trim()).filter(Boolean);
+  const lastLine = lines[lines.length - 1] || '';
+
+  // Quoted questions in titles or citations (e.g. "Are You Ready?") are not agent questions
+  if (
+    lastLine.endsWith('?"') ||
+    lastLine.endsWith('?*') ||
+    lastLine.endsWith('?**') ||
+    lastLine.endsWith('?)') ||
+    lastLine.startsWith('|') ||
+    lastLine.startsWith('>')
+  ) {
+    return false;
+  }
+
+  // Explicit user prompts
+  const userPromptPatterns = [
+    /\bwould you like\b/i,
+    /\bshould i proceed\b/i,
+    /\bwhich one would you prefer\b/i,
+    /\bwhich option\b/i,
+    /\bplease let me know\b/i,
+    /\bdo you want me to\b/i,
+    /\bhow would you like to proceed\b/i,
+    /\bshall i\b/i,
+  ];
+
+  for (const pattern of userPromptPatterns) {
+    if (pattern.test(lastLine) || (lines.length <= 2 && pattern.test(trimmed))) {
+      return true;
+    }
+  }
+
+  // Direct short conversational question
+  if (lines.length <= 3 && lastLine.endsWith('?') && !lastLine.startsWith('-') && !lastLine.startsWith('*')) {
+    return true;
+  }
+
+  return false;
 };
 
 export const TaskStatusLive: React.FC<TaskStatusLiveProps> = ({ task, onCancel }) => {
@@ -97,13 +158,7 @@ export const TaskStatusLive: React.FC<TaskStatusLiveProps> = ({ task, onCancel }
     }
   };
 
-  const isQuestionAnswer =
-    task.finalAnswer &&
-    (task.finalAnswer.includes('?') ||
-      task.finalAnswer.toLowerCase().includes('would you like') ||
-      task.finalAnswer.toLowerCase().includes('should i') ||
-      task.finalAnswer.toLowerCase().includes('which one') ||
-      task.finalAnswer.toLowerCase().includes('proceed'));
+  const isQuestionAnswer = isClarificationQuestion(task.finalAnswer);
 
   return (
     <View style={styles.container}>
@@ -132,7 +187,7 @@ export const TaskStatusLive: React.FC<TaskStatusLiveProps> = ({ task, onCancel }
             isQuestionAnswer && { borderColor: 'rgba(245, 158, 11, 0.4)', backgroundColor: 'rgba(245, 158, 11, 0.08)' },
           ]}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
             {isQuestionAnswer ? (
               <HelpCircle size={14} color="#f59e0b" />
             ) : (
@@ -147,7 +202,7 @@ export const TaskStatusLive: React.FC<TaskStatusLiveProps> = ({ task, onCancel }
               {isQuestionAnswer ? 'Agent Question / Clarification' : 'Verified Agent Summary'}
             </Text>
           </View>
-          <Text style={styles.finalAnswerText}>{task.finalAnswer}</Text>
+          <MarkdownRenderer content={task.finalAnswer} selectable={true} />
         </View>
       )}
 

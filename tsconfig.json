@@ -29,6 +29,5 @@
       "path": "services/backend"
     }
   ],
-  "files": [],
-  "extends": "expo/tsconfig.base"
+  "files": []
 }

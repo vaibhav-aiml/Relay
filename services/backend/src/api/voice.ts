@@ -3,6 +3,47 @@ import Groq, { toFile } from 'groq-sdk';
 import { VoiceTranscribeResponse, VoiceFormatRequest, VoiceFormatResponse } from '@relay/shared-types';
 import { authMiddleware } from '../auth/middleware.js';
 
+const DIGIT_WORDS: Record<string, string> = {
+  '0': 'zero',
+  '1': 'one',
+  '2': 'two',
+  '3': 'three',
+  '4': 'four',
+  '5': 'five',
+  '6': 'six',
+  '7': 'seven',
+  '8': 'eight',
+  '9': 'nine',
+};
+
+function formatPhoneNumbersForSpeech(text: string): string {
+  return text.replace(
+    /(?:\+?\b|\+)(?=[^a-zA-Z\n]*\d)(?:\(?\+?\d{1,4}\)?[\s\-\.]?)?(?:\(?\d{2,4}\)?[\s\-\.]?){1,4}\d{2,4}\b/g,
+    (match) => {
+      const trimmed = match.trim();
+      // Do not convert dates (e.g. 2026-11-20 or 20/11/2026)
+      if (/^\d{4}[-\/]\d{2}[-\/]\d{2}$/.test(trimmed) || /^\d{2}[-\/]\d{2}[-\/]\d{4}$/.test(trimmed)) {
+        return match;
+      }
+
+      const digits = trimmed.match(/\d/g) || [];
+      if (digits.length >= 7 && digits.length <= 15) {
+        const parts: string[] = [];
+        for (let i = 0; i < trimmed.length; i++) {
+          const char = trimmed[i];
+          if (char === '+') {
+            parts.push('plus');
+          } else if (DIGIT_WORDS[char]) {
+            parts.push(DIGIT_WORDS[char]);
+          }
+        }
+        return parts.join(', ');
+      }
+      return match;
+    }
+  );
+}
+
 export async function voiceRoutes(app: FastifyInstance) {
   app.addHook('preHandler', authMiddleware);
 
@@ -71,6 +112,9 @@ export async function voiceRoutes(app: FastifyInstance) {
 
     try {
       let result = text;
+
+      // Convert phone numbers to digit-by-digit spoken words
+      result = formatPhoneNumbersForSpeech(result);
 
       // Strip markdown headers
       result = result.replace(/^#{1,6}\s+/gm, '');

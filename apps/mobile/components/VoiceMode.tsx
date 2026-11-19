@@ -15,6 +15,7 @@ import { AudioVisualizer } from './AudioVisualizer';
 import { useVoiceRecording } from '../hooks/useVoiceRecording';
 import { useAppStore } from '../store/useAppStore';
 import { TTSService } from '../services/tts';
+import { MarkdownRenderer } from './MarkdownRenderer';
 
 type VoiceModeState = 'IDLE' | 'LISTENING' | 'PROCESSING' | 'SPEAKING';
 
@@ -47,7 +48,7 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
     useVoiceRecording();
   const { createTask, pollTaskUntilDone, currentTask, isSpeaking, speakResponse } = useAppStore();
 
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<any>(null);
   const pollCleanupRef = useRef<(() => void) | null>(null);
   const autoRelistenTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -371,7 +372,11 @@ export const VoiceMode: React.FC<VoiceModeProps> = ({ visible, onClose }) => {
               <Text style={styles.transcriptRole}>
                 {entry.role === 'user' ? 'You' : '🛰️ Relay'}
               </Text>
-              <Text style={styles.transcriptText}>{entry.text}</Text>
+              {entry.role === 'relay' ? (
+                <MarkdownRenderer content={entry.text} compact={true} selectable={true} />
+              ) : (
+                <Text style={styles.transcriptText}>{entry.text}</Text>
+              )}
             </View>
           ))}
 

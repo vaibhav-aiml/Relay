@@ -5,8 +5,8 @@
 ### Your Autonomous Personal AI Agent
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![React Native](https://img.shields.io/badge/React_Native-0.81-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactnative.dev/)
-[![Expo](https://img.shields.io/badge/Expo-54-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev/)
+[![React Native](https://img.shields.io/badge/React_Native-0.88-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-58-000020?style=for-the-badge&logo=expo&logoColor=white)](https://expo.dev/)
 [![Fastify](https://img.shields.io/badge/Fastify-5.2-202020?style=for-the-badge&logo=fastify&logoColor=white)](https://fastify.dev/)
 [![Firebase](https://img.shields.io/badge/Firebase-13-DD2C00?style=for-the-badge&logo=firebase&logoColor=white)](https://firebase.google.com/)
 [![License](https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge)](LICENSE)
@@ -204,7 +204,7 @@ relay/
 | Layer | Technology |
 |---|---|
 | **Language** | TypeScript 5.7 (strict mode, ES2022) |
-| **Mobile** | React Native 0.81 · Expo 54 · Expo Router · Zustand · expo-speech · expo-av |
+| **Mobile** | React Native 0.88 · Expo 58 · Expo Router · Zustand · expo-speech · expo-audio |
 | **Backend** | Fastify 5 · Pino logger · Node.js · cron-parser |
 | **AI Providers** | Groq SDK (Llama 3.3 70B & Whisper Large v3) · Google Generative AI (Gemini) · Anthropic SDK (Claude) |
 | **Database** | Firebase Admin / Firestore (production) · In-Memory DB (development) |

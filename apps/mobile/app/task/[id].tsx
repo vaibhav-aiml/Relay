@@ -14,7 +14,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ChevronLeft, RefreshCw, Send, Sparkles, CornerDownRight, Volume2 } from 'lucide-react-native';
 import { Header } from '../../components/Header';
-import { TaskStatusLive } from '../../components/TaskStatusLive';
+import { TaskStatusLive, isClarificationQuestion } from '../../components/TaskStatusLive';
 import { ApprovalCard } from '../../components/ApprovalCard';
 import { ApprovalCardQueue } from '../../components/ApprovalCardQueue';
 import { SwarmPipelineView } from '../../components/SwarmPipelineView';
@@ -69,16 +69,7 @@ export default function TaskDetailScreen() {
   // Detect if the completed final answer asked the user a question
   const isAgentQuestion =
     currentTask.status === 'COMPLETED' &&
-    Boolean(
-      currentTask.finalAnswer &&
-        (currentTask.finalAnswer.includes('?') ||
-          currentTask.finalAnswer.toLowerCase().includes('would you like') ||
-          currentTask.finalAnswer.toLowerCase().includes('should i') ||
-          currentTask.finalAnswer.toLowerCase().includes('which one') ||
-          currentTask.finalAnswer.toLowerCase().includes('proceed') ||
-          currentTask.finalAnswer.toLowerCase().includes('search for') ||
-          currentTask.finalAnswer.toLowerCase().includes('let me know'))
-    );
+    isClarificationQuestion(currentTask.finalAnswer);
 
   const handleSendReply = async (textToSend?: string) => {
     const text = (textToSend || replyText).trim();

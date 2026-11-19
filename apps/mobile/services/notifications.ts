@@ -32,25 +32,26 @@ export class MobileNotificationService {
 
     // 1. Setup Android Channels
     if (Platform.OS === 'android') {
-      // High importance channel for approval sign-offs (heads-up banners, vibration, sound)
-      await Notifications.setNotificationChannelAsync('relay-approvals', {
-        name: 'Approval Requests',
-        description: 'Urgent action sign-offs and security approvals',
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#6366f1',
-        enableVibrate: true,
-        enableLights: true,
-        sound: 'default',
-      });
+      try {
+        // High importance channel for approval sign-offs (heads-up banners, vibration)
+        await Notifications.setNotificationChannelAsync('relay-approvals', {
+          name: 'Approval Requests',
+          description: 'Urgent action sign-offs and security approvals',
+          importance: Notifications.AndroidImportance.MAX,
+          vibrationPattern: [0, 250, 250, 250],
+          enableVibrate: true,
+        });
 
-      // Default channel for routine updates and completion alerts
-      await Notifications.setNotificationChannelAsync('relay-updates', {
-        name: 'Routine & Task Updates',
-        description: 'Notifications when scheduled routines start or finish',
-        importance: Notifications.AndroidImportance.DEFAULT,
-        sound: 'default',
-      });
+        // Default channel for routine updates and completion alerts
+        await Notifications.setNotificationChannelAsync('relay-updates', {
+          name: 'Routine & Task Updates',
+          description: 'Notifications when scheduled routines start or finish',
+          importance: Notifications.AndroidImportance.DEFAULT,
+        });
+      } catch (channelErr) {
+        // Expected notice in Expo Go on Android SDK 53+ where remote notifications are restricted
+        console.warn('[MobileNotificationService] Notification channel setup skipped in Expo Go:', channelErr);
+      }
     }
 
     // 2. Setup Interactive Action Categories (opensAppToForeground: true for 100% reliable execution)

@@ -71,28 +71,28 @@ export default function RootLayout() {
           name="index"
           options={{
             title: 'Home',
-            tabBarIcon: ({ color, size }) => <Home size={size || 20} color={color} />,
+            tabBarIcon: ({ color, size }) => <Home size={size || 20} color={String(color)} />,
           }}
         />
         <Tabs.Screen
           name="schedules"
           options={{
             title: 'Routines',
-            tabBarIcon: ({ color, size }) => <Clock size={size || 20} color={color} />,
+            tabBarIcon: ({ color, size }) => <Clock size={size || 20} color={String(color)} />,
           }}
         />
         <Tabs.Screen
           name="history"
           options={{
             title: 'History',
-            tabBarIcon: ({ color, size }) => <History size={size || 20} color={color} />,
+            tabBarIcon: ({ color, size }) => <History size={size || 20} color={String(color)} />,
           }}
         />
         <Tabs.Screen
           name="settings"
           options={{
             title: 'Settings',
-            tabBarIcon: ({ color, size }) => <Settings size={size || 20} color={color} />,
+            tabBarIcon: ({ color, size }) => <Settings size={size || 20} color={String(color)} />,
           }}
         />
         <Tabs.Screen

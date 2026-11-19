@@ -76,9 +76,16 @@ export class GeminiProvider implements IAIProvider {
           };
         });
 
-        const genResult = await model.generateContent({
-          contents: contents as any,
-        });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Gemini request timed out after 6000ms for model ${targetModel}`)), 6000)
+        );
+
+        const genResult = await Promise.race([
+          model.generateContent({
+            contents: contents as any,
+          }),
+          timeoutPromise,
+        ]);
 
         const firstCandidate = genResult.response.candidates?.[0];
         const parts = firstCandidate?.content?.parts || [];
